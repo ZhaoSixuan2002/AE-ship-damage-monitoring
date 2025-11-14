@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+
+# FEM files
+*.inp
+*.odb
+*.sim
+*.prt
+
+# Large output files
+*.npz
+*.pth
+*.vtu
+
+# LaTeX
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.pdf
+
+# Keep GIF animations
+!*.gif
+
+# Directories to ignore
+美工/
+script/01_generate_training_data_output/
+script/02_inp_to_vtu_output/*.vtu
+script/03_preprocess_training_data_output/*.npz
+script/04_train_model_output/*.pth
+script/06_generate_validation_data_output/
+script/07_preprocess_validation_data_output/
+script/FEM_model/
+
+# But keep the GIF files in these directories
+!script/09_render_time_history_output/*.gif
+!script/10_render_vtu_animation_output/**/*.gif
