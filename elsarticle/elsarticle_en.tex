@@ -1,0 +1,405 @@
+
+\documentclass[preprint,12pt,authoryear]{elsarticle}
+% \documentclass[final,5p,times,twocolumn,authoryear]{elsarticle}
+
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage[hyphens]{url} % Better line breaks for long URLs in bibliography
+\usepackage[hidelinks]{hyperref} % For \href command to create clickable links (load last)
+
+\journal{Ocean Engineering}
+
+\begin{document}
+
+\begin{frontmatter}
+\title{A Gradual Damage Suspicion Warning Method for Ship Structures Based on Autoencoder Health Manifold Modeling}
+
+\author[1,2]{Desong Lyu}
+
+\author[1,2]{Lijuan Xia\corref{cor1}}
+\ead{xialj@sjtu.edu.cn}
+\cortext[cor1]{Corresponding author. State Key Laboratory of Ocean Engineering, Shanghai Jiao Tong University, Shanghai, 200240, China}
+
+\affiliation[1]{organization={State Key Laboratory of Ocean Engineering, Shanghai Jiao Tong University},
+addressline={800 Dongchuan Road},
+postcode={200240},
+							 state={Shanghai},
+							 country={China}}
+
+\affiliation[2]{organization={School of Naval Architecture, Ocean and Civil Engineering, Shanghai Jiao Tong University},
+							 addressline={800 Dongchuan Road},
+							 postcode={200240},
+							 state={Shanghai},
+							 country={China}}
+
+\begin{abstract}
+Structural damage identification for ship structures is critical for navigation safety, yet traditional and supervised learning methods require numerous damaged samples that are costly and suffer from simulation--reality mismatch. This paper proposes an autoencoder-based damage identification framework requiring only healthy data, achieving a paradigm shift from instantaneous binary alarms to continuous gradual warning. The autoencoder learns a low-dimensional manifold of strain responses, with reconstruction errors characterizing damage perturbations. Detection thresholds for 252 measurement points are automatically determined using a 3-sigma rule on healthy validation data. The framework achieves detection rates of 94.0\%, 79.0\%, and 85.0\% for crack, corrosion, and multi-damage scenarios, while the healthy false alarm rate of 46.9\% matches the theoretical prediction of 50\%. A continuous damage suspicion index combining per-dimension thresholds and temporal smoothing maps states onto a stable spectrum, effectively suppressing noise-induced false alarms while capturing gradual damage evolution. An end-to-end automated pipeline covering data processing, model training, damage evaluation, and 3D visualization provides a complete solution for ship structural health monitoring validated on a bulk carrier finite element model.
+\end{abstract}
+
+% \begin{graphicalabstract}
+% \includegraphics[width=\textwidth]{graphicalabstract}
+% \end{graphicalabstract}
+
+\begin{highlights}
+	\item An autoencoder-based damage identification framework relying only on healthy data is proposed, which avoids errors introduced by simulated damage samples.
+	\item A damage suspicion index is defined to enable a paradigm shift from instantaneous binary alarms to continuous gradual warning.
+	\item An end-to-end automated pipeline covering data processing, training and evaluation, and 3D visualization is established and validated on a bulk carrier finite element model.
+\end{highlights}
+
+
+\begin{keyword}
+Structural Health Monitoring \sep Autoencoder \sep Ship Structure \sep Damage Detection \sep Unsupervised Learning \sep Gradual Warning
+\end{keyword}
+
+\end{frontmatter}
+
+
+\section{Introduction}
+\label{sec:introduction}
+
+Structural health monitoring (SHM) aims to realize condition assessment and early damage warning over the entire life cycle of structures through in-situ sensing, data-driven identification, and model inference. It is widely regarded as a key technological pathway to enhance the safety and availability of large civil and offshore engineering systems\citep{Farrar2007_RSTA_IntroSHM}. Traditional vibration-based methods usually rely on changes in modal parameters such as frequencies, damping, and mode shapes to characterize potential damage\citep{Carden2004_SHM_VibrationReview}. However, for large-scale structures such as bridges, offshore platforms, and ships, complex environmental excitation, strong external disturbances, and highly variable operating conditions cause these global features to be equally sensitive to temperature, loading, and noise, which easily leads to false alarms and missed alarms\citep{Chang2003_SHM_CivilInfraReview}. Although cross-disciplinary research on nonlinear dynamics and modal analysis has revealed intrinsic links between damage indicators and system nonlinearity, its deployment in practice still faces obstacles in terms of modeling cost and data requirements\citep{Worden2008_STC_NonlinearReview}.
+
+At the same time, the demand for observability and engineering applicability in the field has driven the development of multi-source sensing technologies. Vision-based measurement, robotic inspection, and electromechanical impedance (EMI) methods have jointly expanded the pathway from global vibration-based monitoring to local interface damage detection\citep{Lee2012_SMAS_VisionDisp,Park2010_NDTE_VisionDisp,Myung2010_SHM_Robot}. In terms of modal identification, improved stochastic subspace identification and automated operational modal analysis (OMA) techniques have enhanced robustness under output-only conditions and supported engineering-scale batch processing\citep{Reynders2012_Measurement_ImprovedSSI,Cho2023_AppSci_AOMA}. Fiber optic sensing provides clear advantages for long-distance measurement and strong electromagnetic environments, while EMI and guided wave techniques are particularly effective for localized detection of plate--shell structures. The integration of localization systems with SHM further enriches multi-physics sensing and project-level data management practices\citep{Schenato2021_IEEE_FOReview,Glisic2022_Sensors_FiberSHM,Tenreiro2021_SHM_EMIReview,Mitra2016_SMAS_GWReview,STC2014_LPSvsSHM,Auweraer2003_SHM_InternationalProjects}. Overall, traditional methods have formed mature toolchains in specific application scenarios. However, their dependence on manual feature engineering and sensitivity to environmental variations limit their generalization capability in complex, long-term operating environments\citep{Sohn2007_RSTA_EnvOpVar,Farrar2012_Book_MLPerspective}.
+
+In recent years, the introduction of machine learning and deep learning has enabled a paradigm shift in SHM from the traditional ``feature-engineering-plus-classifier'' scheme to end-to-end representation learning\citep{Worden2007_RSTA_MLforSHM}. Deep learning methods strengthen the modeling capability for complex nonlinear and high-dimensional time-series data. One-dimensional convolutional neural networks (1D-CNNs) have demonstrated a promising combination of low latency and high accuracy in real-time damage identification scenarios, thereby providing new baselines for online monitoring\citep{Toh2020_AppSci_DL_VibrationReview}. Computer vision and deep learning enhance feature representation and end-to-end identification at both local and global levels, and comprehensive reviews summarize their applications and advantages in civil and mechanical structures\citep{Dong2021_SHM_CVReview}. The research trend is shifting from single-threshold decision schemes towards multi-source fusion and adaptive learning, introducing transfer learning to alleviate distribution shifts while emphasizing both cross-disciplinary integration and engineering readiness\citep{Trends2014_SHM_Trends,Catbas2018_JCSHM_Overview}. Methodologically, probabilistic and Bayesian perspectives highlight uncertainty quantification and decision robustness\citep{Beck2001_CACIE_ProbSHM}, and classical system identification and data-driven methods together provide health baselines and verifiable references\citep{Juang1985_AIAA_ERA,Grande2012_JCSHM_DataDriven}. Studies in complex scenarios (such as inland navigation and port engineering) emphasize practical constraints including deployment, data quality, and engineering usability, and regional reviews also stress the importance of end-to-end implementability\citep{Negi2023_SHM_InlandReview,Li2016_SMM_WAReview}.
+
+Despite the significant progress of machine learning over traditional methods in adaptive feature extraction and multivariate fusion, a large portion of existing studies still rely on supervised learning. Damage identification is typically formulated as a classification or regression problem that requires a considerable number of labeled samples with coverage over multiple operating conditions, locations, and damage levels\citep{Gul2009_MSSP_SPR,Farrar2012_Book_MLPerspective}. Representative approaches include supervised training with support vector machines, random forests, and deep neural networks, as well as end-to-end architectures such as 1D-CNNs that jointly perform feature learning and decision making\citep{Abdeljaber2017_JSV_1DCNN,Wang2021_SHM_DLReview}. Because real damaged samples are often scarce and difficult to systematically collect in engineering practice, finite element (FE) modeling is frequently used to construct multiple damage scenarios to generate labeled data for training and validation\citep{Doebling1998_SVD_Review}. However, the combinatorial scale of damage types, locations, and severities, together with the cost of FE modeling, prevents the construction of a truly comprehensive sample set and increases the burden of method maintenance and updates. This motivates the central question of this work: how to achieve robust damage identification without relying on damage labels or simulated damage samples.
+
+In our previous work, we developed and validated an online damage localization framework based on self-supervised learning. A feedforward neural network was trained to perform cross-prediction among different sensor groups solely using real healthy data, without simulated damage samples or manual labels. During online monitoring, damage detection and localization were achieved by clustering the residuals between predictions and measurements. This framework significantly reduced data and label acquisition costs in engineering practice and provided interpretable residual patterns for localization. Nonetheless, it still has several critical limitations: (i) the sensor grouping strategy requires manual design, and the group--model--fusion workflow increases system complexity and maintenance cost; (ii) the grouping strategy is more suitable for single-region damage and struggles to stably distinguish multiple simultaneous damages; (iii) damage decision thresholds rely on manual tuning and lack consistency and reliability across operating conditions; and (iv) instantaneous binary decisions are highly sensitive to transient noise and are unable to characterize the gradual evolution of damage. These limitations constrain the scalability and robustness of the framework in practical applications and call for a more unified and adaptive warning scheme.
+
+To overcome these limitations, this paper integrates an autoencoder (AE) architecture into the main line of damage identification for ship structures. The autoencoder is trained using healthy data to learn a low-dimensional manifold representation and reconstruction mapping of high-dimensional responses. During online monitoring, the residuals between reconstructed and measured responses replace the cross-prediction residuals used earlier, leading to a unified modeling framework without manual grouping and naturally supporting non-uniform perturbations across channels caused by damage at multiple locations. It is worth noting that, although autoencoders have been widely applied to anomaly detection and representation learning in SHM, most existing work focuses on general scenarios such as bridges, buildings, or experimental specimens\citep{Wang2021_SHM_DLReview,Malekloo2021_SHM_TLReview}, while systematic studies targeting ship structures remain scarce. Furthermore, we propose a continuous damage suspicion index based on statistical thresholds and sliding-window smoothing, which converts traditional binary damage decisions at isolated time instants into continuous assessment. By accumulating the degree of threshold exceedance over time, the index maintains separability between healthy and abnormal states while suppressing transient noise and isolated spikes. This enables a shift from post-event damage alarms towards gradual warning of damage evolution.
+
+The main contributions of this work are threefold. First, we propose an autoencoder-based, unified damage identification framework tailored for scenarios without damage labels, which only relies on early-stage healthy voyage data for training and effectively mitigates the simulation--reality gap. Second, we realize a paradigm shift from instantaneous binary alarms to continuous gradual warning by defining a damage suspicion index that combines statistical thresholds with sliding-window smoothing, mapping healthy, transitional, and damaged states onto a continuous spectrum. This not only suppresses transient noise and enhances system stability and interpretability, but also captures the gradual evolution of damage and provides engineers with a monitoring perspective that goes beyond binary decisions. Third, we develop an automated pipeline that covers data acquisition and preprocessing, model training and damage assessment, as well as rendering and interaction. This pipeline is validated end-to-end on a bulk carrier FE model and provides an operational technical solution and visualization toolchain for engineering applications.
+
+
+% ========================================
+% Methodology: Autoencoder-based damage identification framework
+% ========================================
+\section{Autoencoder-based Damage Identification Framework}
+\label{sec:methodology}
+
+The proposed damage identification framework is based on the reconstruction error principle of an AE. The core idea is to train an autoencoder on healthy data to learn a low-dimensional manifold representation of normal responses, and then use reconstruction errors during online monitoring to characterize damage-induced deviations from the healthy manifold. The framework consists of three progressive modules: (a) autoencoder training, where a baseline model is trained on healthy data and stored; (b) per-dimension threshold determination, where dimensional residual statistics on a healthy validation set are used to adaptively determine detection thresholds via a $k$-sigma rule; and (c) damage suspicion evaluation, where temporal smoothing is applied to accumulate threshold exceedances into a continuous index that describes gradual damage evolution.
+
+\subsection{Autoencoder Architecture and Training}
+\label{subsec:autoencoder}
+
+The autoencoder comprises an encoder $f_{\text{enc}}(\cdot)$ and a decoder $f_{\text{dec}}(\cdot)$, mapping a high-dimensional input $\mathbf{x} \in \mathbb{R}^D$ to a latent representation $\mathbf{z} \in \mathbb{R}^{D_z}$ and reconstructing it as $\hat{\mathbf{x}} \in \mathbb{R}^D$, as shown in Eq.~\eqref{eq:encdec}, where $\mathbf{x}$ is the input vector, $\hat{\mathbf{x}}$ is the reconstructed output, and $\theta_{\text{enc}}$ and $\theta_{\text{dec}}$ are the trainable parameters of the encoder and decoder, respectively. In this study, we adopt a multilayer perceptron (MLP) architecture. The encoder hidden layers have dimensions $[768, 384, 192]$ with a latent dimension of $D_z = 192$, and the decoder is symmetric with dimensions $[192, 384, 768]$. All hidden layers use ReLU activations, while the output layer is linear. The network architecture is illustrated in Fig.~\ref{fig:ae_architecture}.
+\begin{equation}
+\mathbf{z} = f_{\text{enc}}(\mathbf{x}; \theta_{\text{enc}}), 
+\quad
+\hat{\mathbf{x}} = f_{\text{dec}}(\mathbf{z}; \theta_{\text{dec}})
+\label{eq:encdec}
+\end{equation}
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=0.7\linewidth]{AE_net.jpg}
+	\caption{Architecture of the autoencoder. The encoder compresses the input into a latent space, and the decoder symmetrically reconstructs it. The latent representation provides a compact description of healthy patterns.}
+	\label{fig:ae_architecture}
+\end{figure}
+
+The bottleneck layer prevents the model from learning an identity mapping, thereby making healthy and damaged samples separable in terms of reconstruction error. Healthy data are distributed near a low-dimensional manifold. By minimizing reconstruction error, the encoder learns dominant high-variance directions, or principal components, of this manifold and compresses low-variance directions. Under linear assumptions, this process is equivalent to retaining the first $D_z$ principal components of the covariance matrix, as shown in Eqs.~\eqref{eq:covariance}--\eqref{eq:pca_approx}, where $\mathbf{C}$ is the covariance matrix, $\mathbf{U}$ is the eigenvector matrix, $\mathbf{\Lambda}$ is the diagonal eigenvalue matrix, and $\mathbf{u}_j$ is the $j$-th principal component direction. A nonlinear autoencoder generalizes these structures to curved manifolds, being sensitive to high-variance joint patterns in the training set while remaining insensitive to low-energy perturbations. Damage-induced perturbations primarily lie in the compressed low-variance subspace. As a result, the encoded representation of a damaged sample is close to that of healthy data, and the decoder reconstructs along the healthy manifold, leading to noticeable residuals in abnormal dimensions.
+\begin{equation}
+\mathbf{C} = \frac{1}{N}\sum_{i=1}^{N}(\mathbf{x}_i - \bar{\mathbf{x}})(\mathbf{x}_i - \bar{\mathbf{x}})^T \in \mathbb{R}^{D \times D}
+\label{eq:covariance}
+\end{equation}
+\begin{equation}
+\mathbf{C} = \mathbf{U}\mathbf{\Lambda}\mathbf{U}^T
+\label{eq:eigendecomp}
+\end{equation}
+\begin{equation}
+\hat{\mathbf{x}} \approx \bar{\mathbf{x}} + \sum_{j=1}^{D_z} \langle \mathbf{x} - \bar{\mathbf{x}}, \mathbf{u}_j \rangle \mathbf{u}_j
+\label{eq:pca_approx}
+\end{equation}
+
+The framework is trained solely on early healthy voyage data $\mathcal{D}_{\text{health}} = \{\mathbf{x}_i\}_{i=1}^{N_{\text{health}}}$, without any damage labels or simulated samples. The training objective is to minimize the reconstruction loss defined in Eq.~\eqref{eq:recon_loss}, where $N_{\text{health}}$ is the number of healthy samples, $\hat{x}_i^{(d)}$ is the reconstructed value of dimension $d$ for sample $i$, and $x_i^{(d)}$ is the corresponding ground truth. We employ the Adam optimizer with a learning rate of $3\times10^{-4}$, a batch size of 256, and a maximum of 2000 epochs. Healthy data are split into a training set and a validation set with a 9:1 ratio. The best model weights are selected based on validation loss.
+\begin{equation}
+\mathcal{L}_{\text{recon}} = \frac{1}{N_{\text{health}}} \sum_{i=1}^{N_{\text{health}}} \|\hat{\mathbf{x}}_i - \mathbf{x}_i\|_2^2 = \frac{1}{N_{\text{health}}} \sum_{i=1}^{N_{\text{health}}} \sum_{d=1}^{D} (\hat{x}_i^{(d)} - x_i^{(d)})^2
+\label{eq:recon_loss}
+\end{equation}
+
+
+\subsection{Per-dimension Residual Statistics and $k$-sigma Thresholds}
+\label{subsec:threshold}
+
+For a trained autoencoder, the reconstruction residual of the $t$-th sample in dimension $d$ is given by Eq.~\eqref{eq:residual}, where $\hat{x}_t^{(d)}$ is the reconstructed value and $x_t^{(d)}$ is the true measurement. Under healthy conditions, residuals $r_t^{(d)}$ arise mainly from model generalization error and measurement noise, and can be approximated as Gaussian: $r^{(d)} \sim \mathcal{N}(\mu^{(d)}, \sigma^{(d)})$. To automatically determine damage detection thresholds, we compute the residual mean $\mu^{(d)}$ and standard deviation $\sigma^{(d)}$ for each dimension using healthy validation data $\mathcal{D}_{\text{val}} = \{\mathbf{x}_i\}_{i=1}^{N_{\text{val}}}$, as shown in Eq.~\eqref{eq:residual_stats}.
+\begin{equation}
+r_t^{(d)} = \hat{x}_t^{(d)} - x_t^{(d)}
+\label{eq:residual}
+\end{equation}
+\begin{equation}
+\mu^{(d)} = \frac{1}{N_{\text{val}}} \sum_{i=1}^{N_{\text{val}}} r_i^{(d)}, \quad
+\sigma^{(d)} = \sqrt{\frac{1}{N_{\text{val}}-1} \sum_{i=1}^{N_{\text{val}}} (r_i^{(d)} - \mu^{(d)})^2}
+\label{eq:residual_stats}
+\end{equation}
+\begin{equation}
+	au_{\text{lower}}^{(d)} = \mu^{(d)} - k \sigma^{(d)}, \quad
+	au_{\text{upper}}^{(d)} = \mu^{(d)} + k \sigma^{(d)}
+\label{eq:threshold_bounds}
+\end{equation}
+
+Using the classical $k$-sigma rule, we obtain the lower and upper thresholds $\tau_{\text{lower}}^{(d)}$ and $\tau_{\text{upper}}^{(d)}$ for each dimension as in Eq.~\eqref{eq:threshold_bounds}. Together they define the detection interval $[\tau_{\text{lower}}^{(d)}, \tau_{\text{upper}}^{(d)}]$, where $k$ is the threshold multiplier. In this study, we set $k = 3$ (corresponding to a 99.73\% confidence interval) to balance detection sensitivity and false alarm rate. Compared with manually tuned global thresholds, this statistical approach adapts to the residual distribution of each dimension and avoids the mismatch caused by uniform thresholds across heterogeneous measurement channels.
+
+\subsection{Damage Suspicion Index Based on Temporal Smoothing}
+\label{subsec:suspicion}
+
+In a multi-dimensional monitoring scenario, snapshot-based detection suffers from severe interference by transient noise. For $D = 252$ dimensions, assuming independence and Gaussian residuals, the single-dimension false alarm probability under healthy conditions is given by Eq.~\eqref{eq:single_dim_false_alarm}, where $\Phi(\cdot)$ is the cumulative distribution function of a standard normal random variable and $k = 3$ corresponds to a 99.73\% confidence interval. The probability that at least one dimension raises a false alarm in a snapshot is given by Eq.~\eqref{eq:multi_dim_false_alarm}. Even in a perfectly healthy state, each snapshot has about a 50\% chance of exceeding the threshold in at least one dimension. Instantaneous noise and sensor drift frequently produce isolated outliers that do not indicate real damage.
+\begin{equation}
+P_{\text{false}}^{(d)} = 2\Phi(-k) \approx 0.27\% \quad (k=3)
+\label{eq:single_dim_false_alarm}
+\end{equation}
+\begin{equation}
+P_{\text{any\_false}} = 1 - (1 - P_{\text{false}}^{(d)})^D \approx 1 - (1 - 0.0027)^{252} \approx 50.0\%
+\label{eq:multi_dim_false_alarm}
+\end{equation}
+
+To address this issue, we define a damage suspicion index that combines per-dimension statistical thresholds with temporal smoothing, thereby transforming binary decisions into gradual warning. Real damage tends to produce persistent abnormal residuals, whereas random noise leads to isolated anomalies. By accumulating threshold exceedances over a sliding window in time, we can effectively distinguish sustained damage from sporadic disturbances. First, for each dimension $d$ at time $t$, we compute the normalized exceedance ratio $\rho_t^{(d)}$ as in Eq.~\eqref{eq:excess_ratio}, where $r_t^{(d)}$ is the residual, $\tau_{\text{upper}}^{(d)}$ and $\tau_{\text{lower}}^{(d)}$ are the thresholds, and $\sigma^{(d)}$ is the standard deviation. When the residual exceeds the upper or lower bound, $\rho_t^{(d)}$ measures the degree of violation in units of standard deviation; otherwise $\rho_t^{(d)} = 0$. Then we apply a sliding window of length $w$ to perform temporal smoothing, as in Eq.~\eqref{eq:sliding_window}, where $\bar{\rho}_t^{(d)}$ is the smoothed exceedance ratio. If a dimension experiences a single-noise disturbance at time $t$ while remaining normal before and after, the smoothed value is significantly diluted; if damage causes sustained threshold exceedances, the smoothed value grows over time.
+\begin{equation}
+\rho_t^{(d)} = \begin{cases}
+\dfrac{r_t^{(d)} - \tau_{\text{upper}}^{(d)}}{\sigma^{(d)}}, & \text{if } r_t^{(d)} > \tau_{\text{upper}}^{(d)} \\[8pt]
+\dfrac{\tau_{\text{lower}}^{(d)} - r_t^{(d)}}{\sigma^{(d)}}, & \text{if } r_t^{(d)} < \tau_{\text{lower}}^{(d)} \\[8pt]
+0, & \text{otherwise}
+\end{cases}
+\label{eq:excess_ratio}
+\end{equation}
+\begin{equation}
+\bar{\rho}_t^{(d)} = \frac{1}{w} \sum_{i=t-w+1}^{t} \rho_i^{(d)}
+\label{eq:sliding_window}
+\end{equation}
+\begin{equation}
+S_t^{(d)} = \min(\alpha \cdot \bar{\rho}_t^{(d)}, 100)
+\label{eq:suspicion_index}
+\end{equation}
+
+Finally, we map the smoothed exceedance ratio to a damage suspicion index $S_t^{(d)} \in [0, 100]$ using a decay factor $\alpha$, as in Eq.~\eqref{eq:suspicion_index}, where $S_t^{(d)} = 0$ indicates a perfectly healthy state. In this study, we choose a window size $w = 10$ and a decay factor $\alpha = 20$ to balance responsiveness and robustness. For visualization, the damage suspicion index can be mapped to opacity or color. For example, Eq.~\eqref{eq:opacity_mapping} maps larger suspicion values to smaller opacity values so that healthy regions appear transparent while damaged regions appear opaque.
+\begin{equation}
+\text{Opacity}_t^{(d)} = 100 - S_t^{(d)}
+\label{eq:opacity_mapping}
+\end{equation}
+
+
+\subsection{End-to-end Automated Pipeline}
+\label{subsec:pipeline}
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\linewidth]{flow}
+	\caption{End-to-end automated pipeline. The workflow is divided into three stages: data processing, model training and validation, and visualization. Modules communicate via standardized file interfaces.}
+	\label{fig:pipeline}
+\end{figure}
+
+This study develops an end-to-end automated pipeline, as illustrated in Fig.~\ref{fig:pipeline}. In the data generation and processing stage, a bulk carrier finite element model is used with an Abaqus batch solver to perform multi-scenario static analyses, producing strain snapshots at 252 measurement points under randomly sampled loading conditions. The ".inp" files are converted to VTU format, and an ID mapping table for the measurement points is generated. The preprocessing module aggregates healthy samples into a matrix $\mathbf{V} \in \mathbb{R}^{N \times D}$ and applies a robust Gaussianization transform for standardization, whose parameters are stored and reused for all subsequent datasets.
+
+In the model training and validation stage, the preprocessed data are split into training and validation sets. The autoencoder is trained to minimize reconstruction error and learn the healthy manifold, while the best weights are saved. Residual distributions are then computed for healthy validation samples, and per-dimension thresholds $\tau^{(d)}$ are determined using the $k$-sigma rule. In the damage monitoring validation stage, the FE model is modified to generate crack, corrosion, multi-damage, and healthy test cases. The same robust Gaussianization transform is applied before feeding data into the network. The reconstructed outputs are transformed back to the original scale, residuals are computed, and damage detection statistics such as detection rate and false alarm rate are obtained. Damage suspicion indices are then computed, reorganized into 2D temporal heatmaps, and mapped onto the 3D cargo hold model to generate interactive animations. The workflow follows a modular design, with standardized file interfaces connecting stages, and all scripts are implemented in Python.
+
+
+% ========================================
+% Experiments: Bulk carrier FE model
+% ========================================
+\section{Experimental Validation on a Bulk Carrier Finite Element Model}
+\label{sec:experiments}
+
+\subsection{Finite Element Model and Random Load Definition}
+\label{sec:fem_model}
+
+The finite element model of the cargo hold region of a bulk carrier used for data generation and validation adopts a refined S4R shell-element mesh and represents the port-side half of the hull, covering a longitudinal extent of ``1/2 + 1 + 1/2" cargo holds. Structural details including the strength deck, side shell, double bottom, top and bottom wing tanks, hatch coamings and brackets, corrugated transverse bulkheads, and longitudinal stiffeners/girders are modeled to ensure geometric fidelity and accurate load transfer, as illustrated in Fig.~\ref{fig:fem_model_overview}(a).
+
+Boundary conditions follow the China Classification Society (CCS) rules. A symmetry constraint is imposed on the midship plane to reflect port--starboard symmetry. Nodes on the fore and aft end faces are rigidly coupled to reference points, where global loads and constraints are applied. One end reference point is fully constrained in translation, while the other is free in the longitudinal direction to allow axial shortening and extension under global bending, thus avoiding unrealistic axial restraint, as shown in Fig.~\ref{fig:fem_model_overview}(b).
+
+The bulk cargo pressure is modeled as a ``paraboloid free surface plus quasi-static pressure'' field. The free surface is determined by the angle of repose and hatch opening dimensions, as in Eq.~\eqref{eq:paraboloid}, where $(x_0, y_0, z_0)$ is the coordinate of the heap center, $\theta$ is the angle of repose related to cargo density, and $L_x, L_y$ are characteristic half-lengths of the hatch opening in the $x$- and $y$-directions. Pressure is applied only below the free surface and increases linearly with depth, as in Eq.~\eqref{eq:pressure}, where $\rho_{\text{cargo}}$ is the cargo density and the $\max(0, \cdot)$ operator ensures that pressure is applied only below the free surface. The resulting distribution exhibits a smooth decay from the heap center towards the periphery, as visualized in Fig.~\ref{fig:fem_model_overview}(c).
+
+\begin{figure*}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{model-new.jpg}
+	\caption{Bulk carrier cargo hold finite element model and random load scenarios. (a) Geometry and typical cross sections; (b) boundary conditions and constraints (midship-plane symmetry and reference-point coupling on end faces); (c) free-surface function and pressure field for bulk cargo; (d) standard and non-standard loading scenarios; (e) other random loads include external hydrostatic pressure, internal ballast tank pressure, and equivalent global hull loads.}
+	\label{fig:fem_model_overview}
+\end{figure*}
+
+\begin{equation}
+z_s(x, y) = z_0 - \frac{\tan\theta}{2\sqrt{L_x^2+L_y^2}}\bigl[(x - x_0)^2 + (y - y_0)^2\bigr]
+\label{eq:paraboloid}
+\end{equation}
+\begin{equation}
+p_{\text{cargo}}(x,y,z) = \rho_{\text{cargo}} g\, \max(0, z_s(x,y) - z)
+\label{eq:pressure}
+\end{equation}
+
+To cover typical and extreme loading scenarios, multiple random loading cases are generated, including mid-hold-full/side-hold-empty, mid-hold-empty/side-hold-full, all-holds-full, and various non-standard unbalanced loadings, as shown in Fig.~\ref{fig:fem_model_overview}(d). Other random loads include external hydrostatic pressure varying with draft, internal pressure caused by ballast water head, and equivalent global bending and torsional loads representing whole-ship effects. Load magnitudes are sampled from uniform distributions to cover sea states ranging from normal to extreme conditions, as illustrated in Fig.~\ref{fig:fem_model_overview}(e).
+
+\subsection{Dataset Configuration and Preprocessing}
+\label{subsec:dataset}
+
+Six datasets are constructed to support model training, validation, and testing. The healthy training set $\mathcal{D}_{\text{train}}$ contains 1800 healthy samples and is used to train the autoencoder to learn the manifold of normal strain responses. The healthy validation set $\mathcal{D}_{\text{val}}$ comprises 200 healthy samples and serves two purposes: monitoring model performance during training to prevent overfitting, and computing per-dimension residual statistics for threshold determination. To evaluate final performance, four independent test sets are prepared: a crack damage test set $\mathcal{D}_{\text{crack}}$ with 100 samples, a corrosion damage test set $\mathcal{D}_{\text{corrosion}}$ with 100 samples, a combined multi-damage test set $\mathcal{D}_{\text{multi}}$ with 100 samples, and a healthy test set $\mathcal{D}_{\text{health}}$ with 100 samples. These test sets are used to evaluate detection performance for different damage types and to estimate the false alarm rate under healthy conditions, as well as to assess the behavior of the damage suspicion index. The dataset configuration is summarized in Table~\ref{tab:dataset_config}.
+
+\begin{table}[!htbp]
+\centering
+\caption{Summary of dataset configuration}
+\label{tab:dataset_config}
+\small
+\begin{tabular}{ccc}
+\hline
+Dataset & Number of samples & Purpose \\
+\hline
+$\mathcal{D}_{\text{train}}$ & 1800 & Autoencoder training \\
+$\mathcal{D}_{\text{val}}$ & 200 & Validation and thresholding \\
+$\mathcal{D}_{\text{crack}}$ & 100 & Damage detection evaluation \\
+$\mathcal{D}_{\text{corrosion}}$ & 100 & Damage detection evaluation \\
+$\mathcal{D}_{\text{multi}}$ & 100 & Damage detection evaluation \\
+$\mathcal{D}_{\text{health}}$ & 100 & False alarm evaluation \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{preprocess_V_original.png}
+	\caption{Distribution of the original healthy training data (first 25 measurement dimensions). For each dimension, the left panel shows scatter plots and the right panel shows histograms. The original data exhibit varying scales, skewness, and heavy tails, which are not ideal for training and statistical thresholding.}
+	\label{fig:preprocess_original}
+\end{figure}
+
+The first 25 measurement dimensions in the healthy training set exhibit significantly different scales, and some display skewed or heavy-tailed distributions, as shown in Fig.~\ref{fig:preprocess_original}. To improve neural network training efficiency and support subsequent statistical analysis, we apply a robust Gaussianization preprocessing step to all datasets. This method converts arbitrary distributions into approximately Gaussian ones via quantile mapping, thereby eliminating scale differences and better satisfying distributional assumptions for later analysis.
+
+First, we estimate the empirical cumulative distribution function (CDF) $F^{(d)}(\cdot)$ of the original data $x^{(d)}$ in dimension $d$. Then each sample is mapped to a Gaussian space using the inverse CDF of a standard normal distribution $\Phi^{-1}(\cdot)$, as in Eq.~\eqref{eq:quantile_transform}, where $\tilde{x}^{(d)}$ is the transformed value. To mitigate the influence of extreme values and noise, we adopt robust parameter estimates based on quantiles, namely the median $m^{(d)}$ and interquartile range $\text{IQR}^{(d)}$, as in Eq.~\eqref{eq:robust_params}, where $Q_{25}^{(d)}$ and $Q_{75}^{(d)}$ are the 25th and 75th percentiles, respectively. Final standardization is performed according to Eq.~\eqref{eq:robust_standardization}, where the constant 1.3489 arises from the theoretical relation $\text{IQR}/\sigma \approx 1.3489$ for a standard normal distribution.
+\begin{equation}
+	ilde{x}^{(d)} = \Phi^{-1}\bigl(F^{(d)}(x^{(d)})\bigr)
+\label{eq:quantile_transform}
+\end{equation}
+\begin{equation}
+m^{(d)} = \text{median}(\{x_i^{(d)}\}_{i=1}^{N}), \quad
+	ext{IQR}^{(d)} = Q_{75}^{(d)} - Q_{25}^{(d)}
+\label{eq:robust_params}
+\end{equation}
+\begin{equation}
+x_{\text{std}}^{(d)} = \frac{\tilde{x}^{(d)} - m^{(d)}}{\text{IQR}^{(d)} / 1.3489}
+\label{eq:robust_standardization}
+\end{equation}
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{preprocess_V_first_trans.png}
+	\caption{Distribution of the healthy training data after robust Gaussianization (first 25 measurement dimensions). Each dimension exhibits an approximately Gaussian distribution with unified scale, supporting statistical thresholding and balanced neural network training.}
+	\label{fig:preprocess_transformed}
+\end{figure}
+
+The transform is fitted on the healthy training set and the transform parameters are stored so that the same mapping can be consistently applied to validation and test sets. Reconstruction outputs are transformed back to the original scale via the inverse transform before residuals are computed. After the transformation, the first 25 dimensions in the healthy training set exhibit unified scales and approximately Gaussian distributions, as shown in Fig.~\ref{fig:preprocess_transformed}, which is significantly improved compared with the original data.
+
+
+\subsection{Network Performance and Threshold Determination}
+\label{subsec:prediction_and_threshold}
+
+The training and validation loss curves of the autoencoder decrease steadily and remain close to each other, without noticeable divergence, indicating that the model has converged well on healthy data without overfitting, as presented in Fig.~\ref{fig:training_loss}. The left panel shows the loss evolution in linear scale, and the right panel uses a logarithmic scale.
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{loss.png}
+	\caption{Training and validation loss of the autoencoder. Left: linear scale; right: logarithmic scale. The two curves decrease synchronously and remain close, indicating that the model has learned the healthy manifold without overfitting.}
+	\label{fig:training_loss}
+\end{figure}
+
+After training, we use the healthy validation set to evaluate reconstruction accuracy and residual statistics. Residual analysis is conducted from both sample-wise and sensor-wise perspectives.To validate the reconstruction quality and residual characteristics of the trained autoencoder, we examine randomly selected samples from the healthy validation set. For each sample, residuals across all 252 measurement dimensions are computed and analyzed. As shown in Fig.~\ref{fig:val_samples_residuals}, the residuals have means close to zero and exhibit approximately symmetric Gaussian shapes, indicating high reconstruction accuracy and no systematic bias under healthy conditions.
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{val_residuals_by_sample.png}
+	\caption{Residual distributions of healthy validation samples (50 randomly selected samples). For each sample, the left panel shows residuals across 252 measurement dimensions, and the right panel shows the histogram of residuals. The means are close to zero and the distributions are approximately Gaussian, indicating good reconstruction performance.}
+	\label{fig:val_samples_residuals}
+\end{figure}
+
+Beyond sample-wise analysis, we compute residual statistics for each measurement dimension across all healthy validation samples. For each dimension $d$, we calculate the mean $\mu^{(d)}$, standard deviation $\sigma^{(d)}$, and the corresponding upper and lower thresholds $\tau_{\text{upper}}^{(d)} = \mu^{(d)} + k\sigma^{(d)}$ and $\tau_{\text{lower}}^{(d)} = \mu^{(d)} - k\sigma^{(d)}$ with $k = 3$. These thresholds define the healthy interval for each dimension. The residual distributions for randomly selected dimensions are visualized in Fig.~\ref{fig:val_dims_residuals}, which confirms the approximately Gaussian behavior and provides the basis for per-dimension damage detection thresholds.
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{val_residuals_by_dim.png}
+	\caption{Residual distributions of healthy validation data for randomly selected measurement dimensions. For each dimension, the left panel shows residuals across all validation samples, and the right panel shows the histogram and kernel density estimate. The mean $\mu$, standard deviation $\sigma$, and thresholds are annotated. These statistics provide the basis for per-dimension damage detection thresholds.}
+	\label{fig:val_dims_residuals}
+\end{figure}
+
+The computed thresholds for all 252 dimensions reveal substantial variations across the measurement channels, as illustrated in Fig.~\ref{fig:threshold_by_dimension}. Both upper and lower bounds $\tau_{\text{upper}}^{(d)}$ and $\tau_{\text{lower}}^{(d)}$ vary significantly with dimension index, highlighting the advantage of per-dimension adaptive thresholds over a single global threshold: more sensitive sensors (with larger standard deviations) receive wider intervals to suppress false alarms, whereas less sensitive ones receive narrower intervals to maintain detection sensitivity. This adaptive mechanism balances detection performance across dimensions and avoids increased missed or false alarms caused by manually tuned global thresholds.
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{val_tau_by_dimension.png}
+	\caption{Upper and lower damage detection thresholds across 252 dimensions. The substantial variation across dimensions highlights the advantage of per-dimension adaptive thresholds, which balance detection sensitivity and false alarm suppression.}
+	\label{fig:threshold_by_dimension}
+\end{figure}
+
+
+\subsection{Baseline Detection Performance with Thresholding}
+\label{subsec:detection_performance}
+
+
+To evaluate the proposed framework, we generate four independent test sets, each with 100 samples, by modifying local plate thickness parameters in the FE model. Strip-like crack damage is used to mimic linear defects in fatigue-sensitive regions of the hull, patch-like corrosion reflects area-wise thickness loss under long-term corrosive environments, and combined multi-damage includes both crack and corrosion to simulate complex degradation scenarios. Healthy samples are used to assess false alarm behavior. To understand the mechanical influence of damage, we perform stress perturbation analysis for representative crack and corrosion cases under the same loading condition by computing the difference in Mises stress fields before and after damage, with a visualization threshold set to $10^{-4}$ of the yield strength of structural steel. As shown in Fig.~\ref{fig:damage_modeling_and_influence}, the geometric modeling of the three damage types (a--c) uses enlarged thickness scaling to highlight the damage region, while the perturbation analysis (d--e) clearly reveals localized stress effects: perturbations peak near the damage and decay rapidly with distance, with their influence confined to a limited neighborhood. This localized pattern provides a physical basis for using spatial response differences across sensors to detect, locate, and classify damage.
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{damage-show.jpg}
+	\caption{Finite element modeling of typical damages and visualization of localized stress perturbations. (a--c) Geometric representations of three damage types: strip-like crack, patch-like corrosion, and combined multi-damage; (d--e) stress perturbation fields (Mises stress differences with a threshold of 0.01 MPa) for crack and corrosion. The perturbations are highly localized around the damage and decay rapidly with distance, providing a physical basis for spatial pattern recognition using multiple measurement points.}
+	\label{fig:damage_modeling_and_influence}
+\end{figure}
+
+For each sample in the test sets, we compute reconstruction residuals across the 252 dimensions and compare them with pre-computed thresholds to identify dimensions exceeding the healthy interval. Residual distributions for four randomly selected samples from each test set are visualized in Fig.~\ref{fig:base_result}, where red bars indicate dimensions whose residuals exceed thresholds, and green dashed lines mark the upper and lower bounds.
+
+\begin{figure*}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{base_result.jpg}
+	\caption{Sample-wise residual distributions and threshold exceedances for four test sets. Red bars indicate dimensions exceeding the thresholds, and green dashed lines denote the bounds. For damaged samples, exceedances cluster around damage-related sensor dimensions, while isolated false alarms appear in other dimensions. Healthy samples exhibit low residual levels overall but still have scattered threshold exceedances.}
+	\label{fig:base_result}
+\end{figure*}
+
+For damaged samples, threshold exceedances are concentrated in dimensions related to the damage location: crack damage primarily affects dimensions near index 208; corrosion damage mainly leads to exceedances around dimensions 188 and 199, which are located near the corrosion region; and multi-damage leads to clustered exceedances near dimensions 2 and 19. These spatially clustered patterns reflect localized response perturbations and are consistent with the stress field analysis. However, even when exceedances are concentrated near damage-related sensors, other dimensions still exhibit random isolated exceedances, especially in healthy samples, where the overall residual level is low but scattered exceedances persist without spatial clustering.
+
+To quantify detection performance at the population level, we summarize the results across all test samples, including histograms of the number of exceeded dimensions and pie charts for detection or false alarm rates for the four test sets as shown in Fig.~\ref{fig:base_result_summary}. Detection rates for crack, corrosion, and multi-damage reach 94.0\%, 79.0\%, and 85.0\%, respectively, indicating that the baseline threshold-based method is effective in identifying damaged samples. However, localization accuracy is limited: only 35.0\% of corrosion samples have no false alarms outside the true damage region, 21.0\% for crack, and 16.9\% for multi-damage. In other words, most damaged samples, while correctly flagged as damaged, exhibit misleading exceedances in non-damaged areas, complicating localization.
+
+More importantly, the healthy test set shows a false alarm rate as high as 46.9\%, which matches the theoretical prediction of about 50\% derived in Eq.~\eqref{eq:multi_dim_false_alarm}. This experimentally confirms that, although the 3-sigma threshold corresponds to a high confidence level for a single dimension, its direct use in a 252-dimensional monitoring scenario leads to frequent false alarms. Simply increasing $k$ could reduce false alarms but at the cost of missing early or remote damage. To reconcile safety and localization precision, we introduce the continuous damage suspicion index described earlier, which accumulates persistent anomalies while filtering transient disturbances.
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=0.7\textwidth]{combined_detection_summary.png}
+	\caption{Summary of detection results for four test sets. For each set, the distribution of the number of exceeded dimensions and detection or false alarm rates are shown. While the baseline method achieves high detection rates for damaged samples, localization accuracy is limited and the false alarm rate for healthy samples is high, revealing the limitations of snapshot-based binary thresholding in high-dimensional monitoring.}
+	\label{fig:base_result_summary}
+\end{figure}
+
+
+\subsection{Continuous Gradual Warning and Visualization Based on Damage Suspicion}
+\label{subsec:suspicion_visualization}
+
+To validate the effectiveness of the proposed damage suspicion index, we perform comparative experiments on the four test sets. Each test sequence contains 100 time steps. Static snapshots of the first five time steps of the damage suspicion distribution for representative samples from the four scenarios are presented in Fig.~\ref{fig:suspicion_frame}, where 252 measurement points are arranged by index and shown as a heatmap, and darker colors indicate higher damage suspicion values.
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{suspicion_frame.jpg}
+	\caption{Time evolution of damage suspicion for representative samples from four scenarios (first five frames). In early frames, differences among scenarios are not obvious due to noise; over time, damage regions accumulate suspicion and become clearly localized, while healthy samples remain at low suspicion after temporal smoothing. (Complete animation link: \href{https://github.com/ZhaoSixuan2002/AE-ship-damage-monitoring/raw/main/script/09_render_time_history_output/opacity_animation_combined_2x2.gif}{heatmap\_animation.gif})}
+	\label{fig:suspicion_frame}
+\end{figure}
+
+At the initial stages following damage occurrence, suspicion patterns are not clearly distinguishable due to noise. For example, corrosion samples exhibit only weakly elevated suspicion at a few points in the first 1--3 frames, insufficient for reliable localization; in the first frame of multi-damage, the measurement points corresponding to the damage region on the right remain nearly white. Even healthy samples can exhibit a few darker points in the first 1--2 frames, which would trigger false alarms under snapshot-based binary decisions. However, as time progresses (frames 3--5), the sliding window increasingly covers damage-induced responses. Suspicion in damage regions accumulates and stabilizes at high levels for crack, corrosion, and multi-damage scenarios, forming distinct spatial patterns, whereas suspicion in healthy samples is consistently diluted by temporal smoothing and remains low. This contrast demonstrates the paradigm shift from instantaneous binary alarms to continuous gradual warning.
+
+To present the damage suspicion index in an intuitive and engineering-friendly way, we further build a 3D interactive visualization toolchain using PyVista to map suspicion values of individual measurement points onto the FE model of the ship structure. Typical 3D visualizations for the four scenarios at representative time steps are shown in Fig.~\ref{fig:3d_crack_visualization}, together with the early evolution across the first eight frames. Damage suspicion is mapped using a blue--white--red color scale. Engineers can combine their domain knowledge with these visualizations to assess the structural importance of suspicious regions and make informed decisions on inspection and maintenance.
+
+\begin{figure*}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{3d_frame.jpg}
+\caption{3D visualization of the damage suspicion index for four validation scenarios. The main view shows representative steady-state suspicion distributions, and the right panels show evolution over the first eight frames. A blue--white--red color scale is used for suspicion. (Complete 3D animation links: \href{https://github.com/ZhaoSixuan2002/AE-ship-damage-monitoring/raw/main/script/10_render_vtu_animation_output/crack/damage_suspicion_animation.gif}{crack.gif}; \href{https://github.com/ZhaoSixuan2002/AE-ship-damage-monitoring/raw/main/script/10_render_vtu_animation_output/corrosion/damage_suspicion_animation.gif}{corrosion.gif}; \href{https://github.com/ZhaoSixuan2002/AE-ship-damage-monitoring/raw/main/script/10_render_vtu_animation_output/multi/damage_suspicion_animation.gif}{multi.gif}; \href{https://github.com/ZhaoSixuan2002/AE-ship-damage-monitoring/raw/main/script/10_render_vtu_animation_output/health/damage_suspicion_animation.gif}{health.gif})}
+\label{fig:3d_crack_visualization}
+\end{figure*}
+
+
+\section{Conclusions and Future Work}
+\label{sec:conclusion}
+
+This paper addresses the dual challenges of scarce damage samples and simulation--reality mismatch in ship structural health monitoring by proposing an autoencoder-based damage identification framework that relies solely on healthy strain response data. The method trains an autoencoder on 1800 healthy voyage samples to learn a low-dimensional manifold representation of normal responses and uses reconstruction residuals to characterize damage perturbations without any damage labels or simulated samples. Based on residual statistics computed from 200 healthy validation samples, 3-sigma thresholds are automatically determined for 252 measurement dimensions, avoiding manual threshold tuning. Building on this, we define a continuous damage suspicion index that combines per-dimension thresholds with sliding-window smoothing (window size $w = 10$ and decay factor $\alpha = 20$), achieving a shift from post-event damage alarms to gradual warning of damage evolution.
+
+Validation on a bulk carrier FE model with 400 test samples shows that the baseline threshold-based method achieves detection rates of 94.0\%, 79.0\%, and 85.0\% for crack, corrosion, and combined multi-damage scenarios, respectively. However, the false alarm rate for healthy samples reaches 46.9\%, in close agreement with the theoretically predicted 50\% false-alarm probability, confirming that snapshot-based binary thresholding is prone to false alarms and limited in localization accuracy. Under the proposed continuous damage suspicion index, the suspicion level of healthy samples remains low over time, while that of damaged samples increases gradually after damage occurrence and stabilizes at high levels. This not only distinguishes healthy and damaged states but also provides continuous assessment of intermediate stages of damage evolution. Temporal smoothing effectively attenuates the influence of transient noise and isolated outliers, offering engineers a more stable and informative tool for tracking damage evolution. In addition, we develop an automated end-to-end pipeline covering data acquisition and processing, model training and damage assessment, and 3D rendering and interaction, thereby providing a complete technical solution and visualization toolchain for ship structural health monitoring.
+
+Future work will focus on several directions. First, the generalization ability of the proposed model under real ocean environments needs to be further validated using full-scale ship monitoring data, for which we plan to conduct on-board data collection and investigate transfer learning strategies. Second, while this study focuses on crack and corrosion damage scenarios, a more comprehensive evaluation of complex damage modes (such as combined fatigue and corrosion, or structural modifications during service) is needed; an extended library of damage scenarios and multi-scale modeling efforts are currently underway. Third, integration of the proposed framework with online monitoring systems, including data acquisition hardware, communication infrastructure, and onboard decision support interfaces, will be explored to facilitate real-world deployment.
+
+\section*{Data Availability Statement}
+The code used to support the findings of this study will be made publicly available on GitHub after the manuscript is accepted, and a link will be provided in the final version of the paper.
+
+\bibliographystyle{elsarticle-harv}
+\bibliography{references}
+
+\end{document}
+
+\endinput

@@ -1,0 +1,32 @@
+好的，明白了。删除对先前研究局限性的详细说明，只提及之前的论文以建立联系，然后直接强调新论文为何非常适合该期刊。
+
+这是一个修改后的版本：
+
+Li-juan Xia
+State Key Laboratory of Ocean Engineering, Shanghai Jiao Tong University, Shanghai, 200240, China
+
+Jonas W. Ringsberg
+Ocean Engineering
+Elsevier Ltd, The Boulevard, Langford Lane, Kidlington, Oxford, OX5 1GB, United Kingdom
+
+November 14, 2025
+
+Dear Prof. Ringsberg,
+
+We wish to submit an original research paper entitled “A Gradual Damage Suspicion Warning Method for Ship Structures Based on Autoencoder Health Manifold Modeling” for consideration for publication in Ocean Engineering.
+
+This paper tackles the critical challenges in ship Structural Health Monitoring (SHM), namely the reliance on damage samples which are costly to obtain and suffer from simulation-reality mismatch. To address this, we propose a novel damage identification framework based on an autoencoder, which requires only healthy data. The model learns a low-dimensional manifold of normal strain responses, and uses reconstruction errors to characterize damage-induced perturbations. Crucially, our work introduces a continuous damage suspicion index that combines automatically determined statistical thresholds with temporal smoothing, achieving a paradigm shift from conventional instantaneous binary alarms to a more robust continuous gradual warning. Our findings are significant because this method not only overcomes the reliance on scarce damage samples but also effectively suppresses noise-induced false alarms while capturing the gradual evolution of damage. Furthermore, we present a complete, end-to-end automated pipeline, from data processing to 3D visualization, providing a practical solution for ship SHM.
+
+We were pleased that our previous research paper, “An Online Damage Identification Method for Ship Structures Based on Self-Supervised Training with In-Service Health Data and Two-Stage Clustering Analysis,” was published in your esteemed journal. The current submission represents a significant advancement and a direct continuation of our work in this area. We believe this study is an exceptionally strong fit for Ocean Engineering. We feel its findings will be highly relevant to your audience by offering a more nuanced and reliable solution to the persistent challenges in real-world ship SHM applications.
+
+The article “A Gradual Damage Suspicion Warning Method for Ship Structures Based on Autoencoder Health Manifold Modeling” has not been published elsewhere, and it reflects original research conducted by its authors. None of the authors have any conflicts of interest to disclose concerning this study.
+
+Thank you for your valuable time and consideration.
+
+Sincerely,
+
+Lijuan Xia
+
+Professor
+
+xialj@sjtu.edu.cn

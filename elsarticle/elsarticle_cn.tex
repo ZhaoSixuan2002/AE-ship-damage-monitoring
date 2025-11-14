@@ -1,0 +1,407 @@
+\documentclass[preprint,12pt,authoryear]{elsarticle}
+% \documentclass[final,5p,times,twocolumn,authoryear]{elsarticle}
+
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage[hyphens]{url} % 参考文献中长 URL 的换行优化
+\usepackage[hidelinks]{hyperref} % 提供 \href 等命令并生成可点击链接（需最后加载）
+\usepackage[UTF8]{ctex} % 中文支持
+
+\journal{Ocean Engineering}
+
+\begin{document}
+
+\begin{frontmatter}
+\title{基于自编码器健康流形建模的船体结构渐进损伤可疑度预警方法}
+
+\author[1,2]{Desong Lyu}
+
+\author[1,2]{Lijuan Xia\corref{cor1}}
+\ead{xialj@sjtu.edu.cn}
+\cortext[cor1]{通讯作者. 船舶海洋工程国家重点实验室, 上海交通大学, 上海, 200240, 中国}
+
+\affiliation[1]{organization={船舶海洋工程国家重点实验室, 上海交通大学},
+addressline={东川路800号},
+postcode={200240},
+							 state={上海},
+							 country={中国}}
+
+\affiliation[2]{organization={船舶海洋与建筑工程学院, 上海交通大学},
+							 addressline={东川路800号},
+							 postcode={200240},
+							 state={上海},
+							 country={中国}}
+
+\begin{abstract}
+针对船体结构的损伤识别问题, 传统方法和监督学习方法通常需要大量损伤样本, 获取成本高且易受到“仿真--实船”差异的影响。本文提出了一种仅依赖健康数据的自编码器结构损伤识别框架, 将损伤告警由瞬时二元判决拓展为连续渐进预警。自编码器在健康应变响应数据上学习低维流形, 通过重构误差刻画损伤扰动; 再利用健康验证数据上的残差统计, 按照 3 倍标准差准则为 252 个测点自动确定检测阈值。在裂纹、腐蚀以及复合损伤三类工况下, 所提出方法的检测率分别达到 94.0\%、79.0\% 和 85.0\%, 而健康工况的虚警率为 46.9\%, 与理论预测的 50\% 基本一致。进一步地, 定义结合逐维阈值与时间平滑的连续损伤可疑度指标, 将监测状态映射到稳定光谱上, 有效抑制噪声引起的虚警, 同时能够表征损伤的渐进演化过程。本文还构建了覆盖数据处理、模型训练、损伤评估和三维可视化的端到端自动化流程, 并基于散货船有限元模型进行了系统验证, 为船体结构健康监测提供了一套完整工程解决方案。
+\end{abstract}
+
+% \begin{graphicalabstract}
+% \includegraphics[width=\textwidth]{graphicalabstract}
+% \end{graphicalabstract}
+
+\begin{highlights}
+	\item 提出了一种仅依赖健康数据的自编码器损伤识别框架, 避免了利用仿真损伤样本带来的建模误差。
+	\item 定义损伤可疑度指标, 将传统瞬时二元告警拓展为连续渐进预警模式。
+	\item 建立并验证了一套覆盖数据处理、训练与评估以及三维可视化的端到端自动化流程, 并在散货船有限元模型上进行了验证。
+\end{highlights}
+
+
+\begin{keyword}
+结构健康监测 \sep 自编码器 \sep 船体结构 \sep 损伤检测 \sep 无监督学习 \sep 渐进预警
+\end{keyword}
+
+\end{frontmatter}
+
+
+\section{引言}
+\label{sec:introduction}
+
+结构健康监测(Structural Health Monitoring, SHM)旨在基于原位监测、数据驱动识别与模型推断, 实现结构全寿命周期的状态评估与早期损伤预警, 被广泛认为是提升大型土木与海洋工程系统安全性与可利用率的重要技术途径\citep{Farrar2007_RSTA_IntroSHM}。传统振动型方法通常依赖固有频率、阻尼比和振型等模态参数的变化来表征潜在损伤\citep{Carden2004_SHM_VibrationReview}。然而, 对于桥梁、海上平台和船舶等大型结构, 环境激励复杂、外部扰动强烈且工况高度多变, 这些全局特征对温度、载荷和噪声同样敏感, 极易导致虚警与漏警\citep{Chang2003_SHM_CivilInfraReview}。尽管非线性动力学与模态分析的交叉研究在理论上揭示了损伤指标与系统非线性的内在联系, 但在工程落地方面仍面临建模成本高、数据需求大的挑战\citep{Worden2008_STC_NonlinearReview}。
+
+与此同时, 工程现场对可观测性与可应用性的需求推动了多源传感技术的发展。基于视觉的测量、机器人巡检以及机电阻抗(Electromechanical Impedance, EMI)方法, 共同拓展了从全局振动监测到局部界面损伤识别的路径\citep{Lee2012_SMAS_VisionDisp,Park2010_NDTE_VisionDisp,Myung2010_SHM_Robot}。在模态识别方面, 改进的随机子空间识别(stochastic subspace identification, SSI)与自动化模态分析(Operational Modal Analysis, OMA)提升了在输出仅可测条件下的鲁棒性, 支持工程规模的批量处理\citep{Reynders2012_Measurement_ImprovedSSI,Cho2023_AppSci_AOMA}。光纤传感在长距离测量与强电磁环境中具有显著优势, EMI 与导波方法则在板壳结构的局部损伤检测中表现突出; 与定位系统的融合进一步丰富了多物理量感知与工程项目级数据管理实践\citep{Schenato2021_IEEE_FOReview,Glisic2022_Sensors_FiberSHM,Tenreiro2021_SHM_EMIReview,Mitra2016_SMAS_GWReview,STC2014_LPSvsSHM,Auweraer2003_SHM_InternationalProjects}。整体来看, 传统方法在特定应用场景中已形成较成熟的工具链, 但对人工特征工程的依赖以及对环境变化的敏感性, 限制了其在复杂长期服役环境中的泛化能力\citep{Sohn2007_RSTA_EnvOpVar,Farrar2012_Book_MLPerspective}。
+
+近年来, 机器学习与深度学习的引入推动 SHM 从传统的“特征工程+分类器”范式向端到端表征学习转变\citep{Worden2007_RSTA_MLforSHM}。深度网络增强了对复杂非线性、高维时序数据的建模能力。一维卷积神经网络(1D-CNN)在实时损伤识别场景中展示了较好的低时延与高精度兼顾能力, 为在线监测提供了新的基准方法\citep{Toh2020_AppSci_DL_VibrationReview}。计算机视觉与深度学习在局部与全局两个层面提升了特征表征与端到端识别能力, 相关综述系统总结了其在土木与机械结构中的应用与优势\citep{Dong2021_SHM_CVReview}。研究趋势正从单一阈值判定逐步走向多源融合与自适应学习, 引入迁移学习以缓解分布漂移问题, 并强调跨学科集成与工程可部署性\citep{Trends2014_SHM_Trends,Catbas2018_JCSHM_Overview}。在方法论层面, 概率与贝叶斯视角突出不确定性量化与决策鲁棒性\citep{Beck2001_CACIE_ProbSHM}, 经典系统识别与数据驱动方法共同构建健康基线与可验证参考\citep{Juang1985_AIAA_ERA,Grande2012_JCSHM_DataDriven}。针对内河航运与港口工程等复杂场景的研究强调部署条件、数据质量与工程可用性等实际约束, 区域性综述也进一步强调了端到端可实施性的关键性\citep{Negi2023_SHM_InlandReview,Li2016_SMM_WAReview}。
+
+尽管与传统方法相比, 机器学习在自适应特征提取与多变量融合方面取得了显著进展, 现有研究中仍有相当一部分依赖监督学习。损伤识别通常被表述为分类或回归问题, 需要大量具备标签的样本, 并在工况、位置与损伤程度上具备充分覆盖\citep{Gul2009_MSSP_SPR,Farrar2012_Book_MLPerspective}。典型方法包括利用支持向量机、随机森林和深度神经网络进行监督训练, 以及将特征学习与决策联合一体化的一维卷积网络等端到端结构\citep{Abdeljaber2017_JSV_1DCNN,Wang2021_SHM_DLReview}。由于真实损伤样本在工程实践中往往稀缺且难以系统获取, 有限元(Finite Element, FE)建模常被用来构造多种损伤场景, 从而生成带标签的数据用于训练与验证\citep{Doebling1998_SVD_Review}。然而, 损伤类型、位置与严重程度的组合规模巨大, 配合 FE 建模的成本, 难以构建真正全面的样本集, 并加重方法维护与更新的负担。这直接引出了本文的核心问题: 如何在不依赖损伤标签或仿真损伤样本的前提下, 实现鲁棒的损伤识别?
+
+在前期工作中, 我们提出并验证了一种基于自监督学习的在线损伤定位框架。该框架利用真实健康数据对前馈神经网络进行训练, 仅在健康数据上完成跨传感器组的响应预测, 无需仿真损伤样本与人工标签; 在线监测阶段则通过预测值与实测值之间残差的聚类实现损伤检测与定位。该框架显著降低了工程实践中的数据与标签获取成本, 并通过残差模式为损伤定位提供了一定可解释性。然而, 该方法仍存在若干关键限制: (i) 传感器分组策略依赖人工设计, “分组--建模--融合”的流程增加了系统复杂度与维护成本; (ii) 分组策略更适用于单区域损伤, 在多处同时损伤的场景下难以稳定区分不同损伤; (iii) 损伤判据阈值依赖人工调节, 难以在不同工况下保持一致性与可靠性; (iv) 判决结果为瞬时二元, 对瞬时噪声高度敏感, 难以及时刻层面刻画损伤的渐进演化。这些限制共同制约了方法在实际应用中的可扩展性与鲁棒性, 亟需更加统一、更加自适应的预警方案。
+
+为克服上述问题, 本文将自编码器(autoencoder, AE)结构引入船体结构损伤识别的主线中。自编码器在健康数据上训练, 学习高维响应到低维流形的映射及其重构关系; 在线监测阶段, 以重构残差替代此前的跨预测残差, 构建不依赖人工分组的统一建模框架, 自然适应多位置损伤导致的各测点非均匀扰动。需要指出的是, 虽然自编码器在 SHM 异常检测与表征学习中已有较多应用, 现有工作多数集中于桥梁、建筑或试验构件等一般场景\citep{Wang2021_SHM_DLReview,Malekloo2021_SHM_TLReview}, 针对船体结构的系统性研究仍然较少。进一步地, 我们提出了一种基于统计阈值与滑动窗平滑的连续损伤可疑度指标, 将传统在孤立时刻做出的二元损伤判定转换为连续演化评估; 通过在时间上累积阈值超限程度, 该指标在抑制瞬时噪声与孤立尖峰的同时, 仍保持对健康与异常状态的可分性, 从而实现从事后损伤告警向渐进损伤预警的转变。
+
+本文的主要贡献概括如下: 第一, 提出了一种面向“无损伤标签”场景的自编码器统一损伤识别框架, 仅依赖航行早期健康数据完成训练, 有效缓解了仿真--实船差异问题。第二, 通过定义结合统计阈值与滑动窗平滑的损伤可疑度指标, 实现了从瞬时二元告警向连续渐进预警的范式转变, 将健康、过渡与损伤状态映射到连续谱上; 该指标不仅抑制瞬时噪声、提升系统稳定性与可解释性, 还能够捕捉损伤的渐进演化, 为工程人员提供超越二元判决的监测视角。第三, 构建了覆盖数据获取与预处理、模型训练与损伤评估以及渲染与交互的自动化流程, 并在散货船有限元模型上进行了端到端验证, 为工程应用提供了一套可操作的技术路线与可视化工具链。
+
+
+% ========================================
+% Methodology: Autoencoder-based damage identification framework
+% ========================================
+\section{基于自编码器的损伤识别框架}
+\label{sec:methodology}
+
+所提出的损伤识别框架基于自编码器的重构误差原理。核心思想是在健康数据上训练自编码器, 学习正常响应的低维流形表征; 在在线监测阶段, 利用重构误差刻画由损伤引入的偏离健康流形的扰动。整体流程包含三个递进模块: (a) 自编码器训练, 在健康数据上训练基线模型并保存; (b) 逐维阈值确定, 在健康验证集上统计残差分布, 通过 $k$ 倍标准差准则自适应确定检测阈值; (c) 损伤可疑度评估, 通过时间平滑累积阈值超限程度, 构造描述渐进损伤演化的连续指标。
+
+\subsection{自编码器结构与训练}
+\label{subsec:autoencoder}
+
+自编码器由编码器 $f_{\text{enc}}(\cdot)$ 与解码器 $f_{\text{dec}}(\cdot)$ 组成, 将高维输入 $\mathbf{x} \in \mathbb{R}^D$ 映射到潜在空间表征 $\mathbf{z} \in \mathbb{R}^{D_z}$, 再重构为 $\hat{\mathbf{x}} \in \mathbb{R}^D$, 如式~\eqref{eq:encdec} 所示。其中, $\mathbf{x}$ 为输入向量, $\hat{\mathbf{x}}$ 为重构输出, $\theta_{\text{enc}}$ 与 $\theta_{\text{dec}}$ 分别为编码器与解码器的可训练参数。本研究采用多层感知机(Multilayer Perceptron, MLP)结构, 编码器隐含层维度设置为 $[768, 384, 192]$, 潜在维度 $D_z = 192$, 解码器结构与之对称 ($[192, 384, 768]$)。所有隐含层采用 ReLU 激活函数, 输出层为线性映射。网络结构示意如图~\ref{fig:ae_architecture} 所示。
+\begin{equation}
+\mathbf{z} = f_{\text{enc}}(\mathbf{x}; \theta_{\text{enc}}), 
+\quad
+\hat{\mathbf{x}} = f_{\text{dec}}(\mathbf{z}; \theta_{\text{dec}})
+\label{eq:encdec}
+\end{equation}
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=0.7\linewidth]{AE_net.jpg}
+	\caption{自编码器结构示意图。编码器将输入压缩到潜在空间, 解码器对其进行对称重构; 潜在表征提供了健康模式的紧凑描述。}
+	\label{fig:ae_architecture}
+\end{figure}
+
+瓶颈层阻止模型学习简单的恒等映射, 使健康样本与损伤样本在重构误差上可分。健康数据分布在低维流形附近; 通过最小化重构误差, 编码器学习该流形的主导高方差方向(主成分), 并压缩低方差方向。在线性假设下, 该过程等价于保留协方差矩阵前 $D_z$ 个主成分, 如式~\eqref{eq:covariance}--\eqref{eq:pca_approx} 所示, 其中 $\mathbf{C}$ 为协方差矩阵, $\mathbf{U}$ 为特征向量矩阵, $\mathbf{\Lambda}$ 为特征值对角矩阵, $\mathbf{u}_j$ 为第 $j$ 个主成分方向。非线性自编码器则将该结构推广至曲流形, 对训练集中高方差联合模式敏感, 对能量较低的扰动不敏感。损伤引起的扰动主要落在被压缩的低方差子空间中, 因此损伤样本在潜在空间中的编码仍接近健康数据, 解码器沿健康流形进行重构, 在异常维度产生显著残差。
+\begin{equation}
+\mathbf{C} = \frac{1}{N}\sum_{i=1}^{N}(\mathbf{x}_i - \bar{\mathbf{x}})(\mathbf{x}_i - \bar{\mathbf{x}})^T \in \mathbb{R}^{D \times D}
+\label{eq:covariance}
+\end{equation}
+\begin{equation}
+\mathbf{C} = \mathbf{U}\mathbf{\Lambda}\mathbf{U}^T
+\label{eq:eigendecomp}
+\end{equation}
+\begin{equation}
+\hat{\mathbf{x}} \approx \bar{\mathbf{x}} + \sum_{j=1}^{D_z} \langle \mathbf{x} - \bar{\mathbf{x}}, \mathbf{u}_j \rangle \mathbf{u}_j
+\label{eq:pca_approx}
+\end{equation}
+
+框架仅使用早期航行阶段的健康数据 $\mathcal{D}_{\text{health}} = \{\mathbf{x}_i\}_{i=1}^{N_{\text{health}}}$ 进行训练, 无需任何损伤标签或仿真样本。训练目标为最小化重构损失, 如式~\eqref{eq:recon_loss} 所示, 其中 $N_{\text{health}}$ 为健康样本数量, $\hat{x}_i^{(d)}$ 与 $x_i^{(d)}$ 分别为第 $i$ 个样本在维度 $d$ 上的重构值与真实值。本研究采用 Adam 优化器, 学习率 $3\times 10^{-4}$, batch 大小 256, 最多训练 2000 个 epoch; 健康数据按 9:1 划分为训练集与验证集, 根据验证集损失选择最优权重。
+\begin{equation}
+\mathcal{L}_{\text{recon}} = \frac{1}{N_{\text{health}}} \sum_{i=1}^{N_{\text{health}}} \|\hat{\mathbf{x}}_i - \mathbf{x}_i\|_2^2 = \frac{1}{N_{\text{health}}} \sum_{i=1}^{N_{\text{health}}} \sum_{d=1}^{D} (\hat{x}_i^{(d)} - x_i^{(d)})^2
+\label{eq:recon_loss}
+\end{equation}
+
+
+\subsection{逐维残差统计与 $k$ 倍标准差阈值}
+\label{subsec:threshold}
+
+对训练完成的自编码器, 第 $t$ 个样本在维度 $d$ 上的重构残差定义如式~\eqref{eq:residual} 所示, 其中 $\hat{x}_t^{(d)}$ 为重构值, $x_t^{(d)}$ 为实测值。在健康条件下, 残差 $r_t^{(d)}$ 主要来源于模型泛化误差与测量噪声, 可近似为高斯分布 $r^{(d)} \sim \mathcal{N}(\mu^{(d)}, \sigma^{(d)})$。为自动确定损伤检测阈值, 我们在健康验证集 $\mathcal{D}_{\text{val}} = \{\mathbf{x}_i\}_{i=1}^{N_{\text{val}}}$ 上统计每一维的残差均值 $\mu^{(d)}$ 与标准差 $\sigma^{(d)}$, 如式~\eqref{eq:residual_stats} 所示。
+\begin{equation}
+r_t^{(d)} = \hat{x}_t^{(d)} - x_t^{(d)}
+\label{eq:residual}
+\end{equation}
+\begin{equation}
+\mu^{(d)} = \frac{1}{N_{\text{val}}} \sum_{i=1}^{N_{\text{val}}} r_i^{(d)}, \quad
+\sigma^{(d)} = \sqrt{\frac{1}{N_{\text{val}}-1} \sum_{i=1}^{N_{\text{val}}} (r_i^{(d)} - \mu^{(d)})^2}
+\label{eq:residual_stats}
+\end{equation}
+\begin{equation}
+	au_{\text{lower}}^{(d)} = \mu^{(d)} - k \sigma^{(d)}, \quad
+	au_{\text{upper}}^{(d)} = \mu^{(d)} + k \sigma^{(d)}
+\label{eq:threshold_bounds}
+\end{equation}
+
+根据经典的 $k$ 倍标准差规则, 可得到每一维的下阈值 $\tau_{\text{lower}}^{(d)}$ 与上阈值 $\tau_{\text{upper}}^{(d)}$, 如式~\eqref{eq:threshold_bounds} 所示, 共同构成检测区间 $[\tau_{\text{lower}}^{(d)}, \tau_{\text{upper}}^{(d)}]$。其中, $k$ 为阈值倍数; 本文选取 $k = 3$, 对应 99.73\% 置信区间, 在检测灵敏度与虚警率之间取得平衡。与人工整定的全局阈值相比, 该统计方法能够自适应各维度的残差分布, 避免在异构测点间采用统一阈值所造成的不匹配。
+
+
+\subsection{基于时间平滑的损伤可疑度指标}
+\label{subsec:suspicion}
+
+在多维监测场景下, 基于瞬时快照的判定极易受到短时噪声干扰。当监测维度为 $D = 252$ 时, 在假设各维残差近似独立且服从高斯分布的条件下, 单维健康状态下的虚警概率为式~\eqref{eq:single_dim_false_alarm}, 其中 $\Phi(\cdot)$ 为标准正态分布的累积分布函数, $k = 3$ 对应 99.73\% 置信区间; 在单快照中至少一维出现虚警的概率为式~\eqref{eq:multi_dim_false_alarm}。即便在完全健康状态下, 每个采样时刻约有 50\% 的概率在至少一个维度上出现超阈值, 短时噪声与传感器漂移均可能产生孤立异常点, 并不代表真实损伤。
+\begin{equation}
+P_{\text{false}}^{(d)} = 2\Phi(-k) \approx 0.27\% \quad (k=3)
+\label{eq:single_dim_false_alarm}
+\end{equation}
+\begin{equation}
+P_{\text{any\_false}} = 1 - (1 - P_{\text{false}}^{(d)})^D \approx 1 - (1 - 0.0027)^{252} \approx 50.0\%
+\label{eq:multi_dim_false_alarm}
+\end{equation}
+
+为此, 我们定义了结合逐维统计阈值与时间平滑的损伤可疑度指标, 将二元判决转换为渐进预警。真实损伤往往导致持续的异常残差, 而随机噪声则产生孤立异常。通过在时间上对阈值超限程度进行滑动窗累积, 可有效区分持续损伤与偶发扰动。首先, 对于时刻 $t$、维度 $d$, 定义归一化超限比 $\rho_t^{(d)}$, 如式~\eqref{eq:excess_ratio} 所示, 其中 $r_t^{(d)}$ 为残差, $\tau_{\text{upper}}^{(d)}$ 与 $\tau_{\text{lower}}^{(d)}$ 为阈值, $\sigma^{(d)}$ 为标准差; 当残差超过上/下阈值时, $\rho_t^{(d)}$ 以标准差为单位度量超限程度, 否则 $\rho_t^{(d)} = 0$。随后, 对 $\rho_t^{(d)}$ 施加长度为 $w$ 的滑动窗平滑, 如式~\eqref{eq:sliding_window} 所示, 其中 $\bar{\rho}_t^{(d)}$ 为平滑后的超限比。如果某一维仅在单个时刻出现噪声扰动, 而前后时刻均正常, 则滑动平均会显著稀释该异常; 若损伤导致持续超限, 则平滑值会随时间逐渐累积。
+\begin{equation}
+\rho_t^{(d)} = \begin{cases}
+\dfrac{r_t^{(d)} - \tau_{\text{upper}}^{(d)}}{\sigma^{(d)}}, & \text{if } r_t^{(d)} > \tau_{\text{upper}}^{(d)} \\[8pt]
+\dfrac{\tau_{\text{lower}}^{(d)} - r_t^{(d)}}{\sigma^{(d)}}, & \text{if } r_t^{(d)} < \tau_{\text{lower}}^{(d)} \\[8pt]
+0, & \text{otherwise}
+\end{cases}
+\label{eq:excess_ratio}
+\end{equation}
+\begin{equation}
+\bar{\rho}_t^{(d)} = \frac{1}{w} \sum_{i=t-w+1}^{t} \rho_i^{(d)}
+\label{eq:sliding_window}
+\end{equation}
+\begin{equation}
+S_t^{(d)} = \min(\alpha \cdot \bar{\rho}_t^{(d)}, 100)
+\label{eq:suspicion_index}
+\end{equation}
+
+最后, 将平滑后的超限比映射为 $[0, 100]$ 区间的损伤可疑度指标 $S_t^{(d)}$, 如式~\eqref{eq:suspicion_index} 所示, 其中 $S_t^{(d)} = 0$ 对应完全健康状态。本研究选取窗长 $w = 10$, 衰减因子 $\alpha = 20$, 以在响应速度与鲁棒性之间取得平衡。在可视化时, 可将损伤可疑度映射为不透明度或颜色; 例如, 式~\eqref{eq:opacity_mapping} 将较大的可疑度映射为较小的不透明度, 使健康区域更为透明而损伤区域更为显著。
+\begin{equation}
+	ext{Opacity}_t^{(d)} = 100 - S_t^{(d)}
+\label{eq:opacity_mapping}
+\end{equation}
+
+
+\subsection{端到端自动化流程}
+\label{subsec:pipeline}
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\linewidth]{flow}
+	\caption{端到端自动化流程示意。整体流程划分为数据处理、模型训练与验证以及可视化三个阶段, 各模块通过标准化文件接口进行耦合。}
+	\label{fig:pipeline}
+\end{figure}
+
+本研究基于上述方法构建了一套端到端自动化流程, 如图~\ref{fig:pipeline} 所示。在数据生成与处理阶段, 采用散货船货舱区域有限元模型, 结合 Abaqus 批处理求解, 在随机载荷工况下计算 252 个测点的应变快照; 将 ".inp" 文件转换为 VTU 格式, 并生成测点 ID 映射表。预处理模块将健康样本聚合为矩阵 $\mathbf{V} \in \mathbb{R}^{N \times D}$, 采用稳健高斯化变换进行标准化处理, 并将变换参数存储以供后续数据集复用。
+
+在模型训练与验证阶段, 预处理后的数据被划分为训练集与验证集。自编码器通过最小化重构误差学习健康流形, 并保存最优权重; 随后在健康验证样本上统计残差分布, 利用 $k$ 倍标准差准则为各维确定阈值 $\tau^{(d)}$。在损伤监测验证阶段, 通过修改有限元模型构造裂纹、腐蚀、复合损伤以及健康等多类测试工况; 所有测试数据均通过同一稳健高斯化变换预处理后输入网络, 重构输出再经逆变换恢复至原量纲, 进而计算残差与各类检测指标(如检测率、虚警率等)。在此基础上计算损伤可疑度, 并重排为二维时间热力图, 再映射到三维货舱结构模型上生成交互式动画。整体流程采用模块化设计, 各阶段通过标准化文件接口耦合, 所有脚本均使用 Python 实现。
+
+
+% ========================================
+% Experiments: Bulk carrier FE model
+% ========================================
+\section{散货船有限元模型算例验证}
+\label{sec:experiments}
+
+\subsection{有限元模型与随机载荷定义}
+\label{sec:fem_model}
+
+用于数据生成与验证的散货船货舱区域有限元模型采用加密的 S4R 壳单元网格, 模拟船体左舷一侧, 纵向范围覆盖“1/2+1+1/2”个货舱。模型中包含强度甲板、舷侧外板、双底、上下翼舱、舱口围及其支承构件、波纹横舱壁以及纵向桁梁/纵骨等细节, 以保证几何逼真度与载荷传递路径的合理性, 如图~\ref{fig:fem_model_overview}(a) 所示。
+
+边界条件遵循中国船级社(CCS)规范。船中截面施加对称约束以反映左右舷对称性; 船首和船尾端面节点与参考点刚性耦合, 通过参考点施加全船荷载与约束。其中一端参考点在平动方向全约束, 另一端在纵向(船长方向)允许自由伸缩, 以避免全船弯曲下不合理的轴向约束, 如图~\ref{fig:fem_model_overview}(b) 所示。
+
+散货压力采用“抛物面自由液面 + 静水压力”模型。自由液面由安息角与舱口尺寸共同决定, 其高度分布可表示为式~\eqref{eq:paraboloid}, 其中 $(x_0, y_0, z_0)$ 为堆载中心坐标, $\theta$ 为与货物密度相关的安息角, $L_x, L_y$ 分别为舱口在 $x$ 与 $y$ 方向上的特征半长; 压力仅作用于自由面以下区域, 并随深度线性增加, 如式~\eqref{eq:pressure} 所示, 其中 $\rho_{\text{cargo}}$ 为货物密度, $\max(0, \cdot)$ 算子保证压力仅在自由面以下取非零值。由此形成的压力场在堆载中心附近达到最大, 向舱口边缘平滑衰减, 如图~\ref{fig:fem_model_overview}(c) 所示。
+
+\begin{figure*}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{model-new.jpg}
+	\caption{散货船货舱有限元模型与随机载荷示意。(a) 几何与典型横剖面; (b) 边界条件与约束(船中对称与端面参考点耦合); (c) 散货自由面函数与压力场; (d) 标准与非标准装载工况; (e) 其他随机载荷包括外部静水压力、压载舱内压以及等效全船载荷。}
+	\label{fig:fem_model_overview}
+\end{figure*}
+
+\begin{equation}
+z_s(x, y) = z_0 - \frac{\tan\theta}{2\sqrt{L_x^2+L_y^2}}\bigl[(x - x_0)^2 + (y - y_0)^2\bigr]
+\label{eq:paraboloid}
+\end{equation}
+\begin{equation}
+p_{\text{cargo}}(x,y,z) = \rho_{\text{cargo}} g\, \max(0, z_s(x,y) - z)
+\label{eq:pressure}
+\end{equation}
+
+为覆盖典型与极端装载工况, 构造了多种随机载荷组合, 包括“中舱满/边舱空”、“中舱空/边舱满”、“全舱满”以及多种不平衡装载等, 如图~\ref{fig:fem_model_overview}(d) 所示。其他随机载荷包括随吃水变化的外部静水压力、由压载水柱产生的内部液压以及代表全船效应的等效纵向弯矩与扭矩等, 其幅值从正常到极端海况范围内按均匀分布采样, 如图~\ref{fig:fem_model_overview}(e) 所示。
+
+
+\subsection{数据集构建与预处理}
+\label{subsec:dataset}
+
+为支撑模型训练、验证与测试, 共构建六个数据集。健康训练集 $\mathcal{D}_{\text{train}}$ 包含 1800 个健康样本, 用于训练自编码器学习正常应变响应流形; 健康验证集 $\mathcal{D}_{\text{val}}$ 包含 200 个健康样本, 一方面用于监控训练过程并防止过拟合, 另一方面用于统计残差分布、确定逐维检测阈值。最终性能评估采用四个相互独立的测试集: 裂纹损伤测试集 $\mathcal{D}_{\text{crack}}$ (100 个样本)、腐蚀损伤测试集 $\mathcal{D}_{\text{corrosion}}$ (100 个样本)、复合损伤测试集 $\mathcal{D}_{\text{multi}}$ (100 个样本) 与健康测试集 $\mathcal{D}_{\text{health}}$ (100 个样本)。这些测试集用于评估不同损伤类型的检测性能、估计健康工况下的虚警率以及分析损伤可疑度指标的行为。数据集配置见表~\ref{tab:dataset_config}。
+
+\begin{table}[!htbp]
+\centering
+\caption{数据集配置概况}
+\label{tab:dataset_config}
+\small
+\begin{tabular}{ccc}
+\hline
+数据集 & 样本数 & 用途 \\
+\hline
+$\mathcal{D}_{\text{train}}$ & 1800 & 自编码器训练 \\
+$\mathcal{D}_{\text{val}}$ & 200 & 验证与阈值确定 \\
+$\mathcal{D}_{\text{crack}}$ & 100 & 损伤检测评估(裂纹) \\
+$\mathcal{D}_{\text{corrosion}}$ & 100 & 损伤检测评估(腐蚀) \\
+$\mathcal{D}_{\text{multi}}$ & 100 & 损伤检测评估(复合损伤) \\
+$\mathcal{D}_{\text{health}}$ & 100 & 健康虚警评估 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{preprocess_V_original.png}
+	\caption{健康训练数据前 25 个测点维度的原始分布。每维左侧为散点图, 右侧为直方图; 不同维度之间量纲差异显著, 部分维度存在偏态与重尾, 不利于网络训练与统计阈值设定。}
+	\label{fig:preprocess_original}
+\end{figure}
+
+对健康训练集的前 25 个测点维度统计可见, 各维量纲差异大, 部分维度呈现偏态或重尾分布, 如图~\ref{fig:preprocess_original} 所示。为提升神经网络训练效率并支持后续统计分析, 本文对所有数据集采用稳健高斯化预处理。该方法通过分位数映射将任意分布近似转换为高斯分布, 从而消除量纲差异, 更好地满足后续分析对分布的要求。
+
+具体而言, 首先估计原始数据 $x^{(d)}$ 在维度 $d$ 上的经验累积分布函数 $F^{(d)}(\cdot)$; 然后通过标准正态分布的逆 CDF $\Phi^{-1}(\cdot)$ 将样本映射到高斯空间, 如式~\eqref{eq:quantile_transform} 所示, 其中 $\tilde{x}^{(d)}$ 为变换后的值。为减弱极值与噪声影响, 我们引入基于分位数的稳健参数估计, 即中位数 $m^{(d)}$ 与四分位距 $\text{IQR}^{(d)}$, 如式~\eqref{eq:robust_params} 所示, 其中 $Q_{25}^{(d)}$ 与 $Q_{75}^{(d)}$ 分别为 25\% 与 75\% 分位数; 最终标准化过程如式~\eqref{eq:robust_standardization} 所示, 常数 1.3489 来自标准正态分布中 $\text{IQR}/\sigma \approx 1.3489$ 的理论关系。
+\begin{equation}
+	ilde{x}^{(d)} = \Phi^{-1}\bigl(F^{(d)}(x^{(d)})\bigr)
+\label{eq:quantile_transform}
+\end{equation}
+\begin{equation}
+m^{(d)} = \text{median}(\{x_i^{(d)}\}_{i=1}^{N}), \quad
+	ext{IQR}^{(d)} = Q_{75}^{(d)} - Q_{25}^{(d)}
+\label{eq:robust_params}
+\end{equation}
+\begin{equation}
+x_{\text{std}}^{(d)} = \frac{\tilde{x}^{(d)} - m^{(d)}}{\text{IQR}^{(d)} / 1.3489}
+\label{eq:robust_standardization}
+\end{equation}
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{preprocess_V_first_trans.png}
+	\caption{稳健高斯化处理后健康训练数据前 25 个测点维度的分布。各维均呈近似高斯分布且量纲统一, 有利于统计阈值设定与网络训练的平衡性。}
+	\label{fig:preprocess_transformed}
+\end{figure}
+
+该变换在健康训练集上拟合, 并将变换参数持久化保存, 在验证集与测试集上复用相同映射; 网络重构输出在计算残差前通过逆变换恢复到原始量纲。变换后, 健康训练集前 25 个维度的分布显著改善, 各维尺度统一且接近高斯形态, 如图~\ref{fig:preprocess_transformed} 所示。
+
+
+\subsection{网络性能与阈值确定}
+\label{subsec:prediction_and_threshold}
+
+自编码器的训练与验证损失随迭代单调下降且两者保持接近, 未出现明显发散, 表明模型在健康数据上已较好收敛且未过拟合, 如图~\ref{fig:training_loss} 所示。左图给出线性坐标下的损失收敛过程, 右图为对数坐标形式。
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{loss.png}
+	\caption{自编码器训练与验证损失曲线。左: 线性坐标; 右: 对数坐标。两条曲线同步下降且相互接近, 表明模型在健康样本上较好学习了流形结构, 未出现明显过拟合。}
+	\label{fig:training_loss}
+\end{figure}
+
+在训练完成后, 利用健康验证集评估重构精度与残差统计特性, 从样本与测点两个视角开展分析。首先, 针对健康验证集随机选取若干样本, 计算其在全部 252 个测点维度上的残差并进行统计, 如图~\ref{fig:val_samples_residuals} 所示。可以看出, 残差均值接近零且分布大致对称, 说明在健康状态下重构精度较高, 未出现系统性偏差。
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{val_residuals_by_sample.png}
+	\caption{健康验证集中随机选取 50 个样本的残差分布。每个样本左侧为 252 维残差散点, 右侧为残差直方图; 残差均值接近零且近似高斯形态, 表明重构精度较高。}
+	\label{fig:val_samples_residuals}
+\end{figure}
+
+其次, 对每个测点维度在全部健康验证样本上的残差进行统计, 得到各维的均值 $\mu^{(d)}$、标准差 $\sigma^{(d)}$ 以及采用 $k = 3$ 时的上/下阈值 $\tau_{\text{upper}}^{(d)} = \mu^{(d)} + k\sigma^{(d)}$ 与 $\tau_{\text{lower}}^{(d)} = \mu^{(d)} - k\sigma^{(d)}$。随机选取若干维度的残差分布如图~\ref{fig:val_dims_residuals} 所示, 验证了残差近似高斯的假设, 为后续逐维检测阈值提供依据。
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{val_residuals_by_dim.png}
+	\caption{健康验证集若干测点维度的残差分布。每维左侧为残差随样本编号变化的散点图, 右侧为直方图与核密度估计; 图中标注了均值 $\mu$、标准差 $\sigma$ 及对应阈值, 为逐维检测阈值设定提供依据。}
+	\label{fig:val_dims_residuals}
+\end{figure}
+
+对全部 252 维度的阈值统计结果表明, 各维的上下阈值 $\tau_{\text{upper}}^{(d)}$ 与 $\tau_{\text{lower}}^{(d)}$ 变化范围较大, 如图~\ref{fig:threshold_by_dimension} 所示。这一结果突出体现了逐维自适应阈值的优势: 对于标准差较大的敏感测点, 阈值区间相对更宽以抑制虚警; 对于较“安静”的测点, 阈值区间更窄以保持足够灵敏度。该机制在不同测点之间平衡了检测性能, 避免单一全局阈值因“顾此失彼”而引发的漏警或虚警增多。
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{val_tau_by_dimension.png}
+	\caption{252 个测点维度上/下阈值分布。显著的跨维度差异表明逐维自适应阈值有助于在抑制虚警与保持检测灵敏度之间取得平衡。}
+	\label{fig:threshold_by_dimension}
+\end{figure}
+
+
+\subsection{基于阈值的基线检测性能}
+\label{subsec:detection_performance}
+
+为评估所提出框架的检测性能, 我们通过修改有限元模型中的局部板厚参数构造四个相互独立的测试集, 每个包含 100 个样本。条带状裂纹损伤用于模拟疲劳敏感区域的线性缺陷, 片状腐蚀损伤反映长期腐蚀工况下的局部减薄, 复合损伤则同时包含裂纹与腐蚀以刻画复杂退化情形; 健康样本用于评估虚警行为。为分析损伤对结构响应的力学影响, 在相同载荷条件下分别在有/无损伤模型上计算 Mises 应力场, 对比得到应力扰动, 并采用低于结构钢屈服强度 $10^{-4}$ 阈值的差值场进行可视化。图~\ref{fig:damage_modeling_and_influence} 展示了三类损伤的几何建模(a--c)以及裂纹与腐蚀工况下的应力扰动(d--e): 为突出损伤区域, 可在可视化时适当放大减薄比例; 可见扰动在损伤附近达到峰值, 并在空间上迅速衰减, 影响范围局部化。这一局部扰动特征为利用多测点空间响应差异进行损伤检测、定位与分类提供了物理基础。
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{damage-show.jpg}
+	\caption{典型损伤的有限元建模及局部应力扰动可视化。(a--c) 三类损伤几何示意: 条带状裂纹、片状腐蚀与复合损伤; (d--e) 裂纹与腐蚀工况下的 Mises 应力扰动场(差分场, 可视化阈值 0.01 MPa)。扰动高度局限于损伤邻域并快速衰减, 为基于多测点空间模式识别的损伤检测提供物理依据。}
+	\label{fig:damage_modeling_and_influence}
+\end{figure}
+
+对四个测试集中每个样本, 计算其在 252 维度上的重构残差并与预先计算的阈值比较, 标记超限维度。图~\ref{fig:base_result} 给出了四个测试集中代表性样本的残差分布, 红色条表示超出阈值的维度, 绿色虚线为上/下界。
+
+\begin{figure*}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{base_result.jpg}
+	\caption{四个测试集中代表性样本的逐维残差与阈值对比。红色条表示超阈值维度, 绿色虚线为上/下阈值。损伤样本中, 超限维度在损伤相关测点附近呈簇状分布; 健康样本整体残差较小, 但仍存在散在超限点。}
+	\label{fig:base_result}
+\end{figure*}
+
+可以看到, 对于损伤样本, 超阈值维度主要集中在与损伤位置相关的测点附近: 裂纹损伤样本多在索引约 208 附近超限; 腐蚀损伤主要导致索引 188 与 199 附近的超限, 对应腐蚀区域附近测点; 复合损伤则在索引约 2 与 19 处出现簇状超限, 与应力扰动分析一致。然而, 即便在损伤相关测点附近形成清晰的簇状模式, 其他维度仍可能出现随机孤立超限, 尤其是在健康样本中, 虽然整体残差水平较低, 但零星超限不可避免。
+
+为在群体层面量化检测性能, 图~\ref{fig:base_result_summary} 总结了四个测试集的检测结果, 包括每个样本超限维度数量的直方图以及检测/虚警率的饼图。对于裂纹、腐蚀与复合损伤三类工况, 基线阈值法的检测率分别达到 94.0\%、79.0\% 和 85.0\%, 表明利用 3 倍标准差阈值的逐维检测在损伤识别方面具有较高有效性; 但在定位精度方面, 只有 35.0\% 的腐蚀样本在真实损伤区域之外没有虚警, 裂纹与复合损伤这一比例分别为 21.0\% 和 16.9\%。换言之, 大多数损伤样本虽能被判定为“损伤”, 但在非损伤区域仍出现误导性的超限, 增加定位难度。
+
+更为关键的是, 健康测试集的虚警率高达 46.9\%, 与基于式~\eqref{eq:multi_dim_false_alarm} 的理论预测(约 50\%)高度一致, 实验证实了在 252 维监测场景下, 即使单维阈值对应较高置信度, 直接采用瞬时二元判决仍难以避免频繁虚警。单纯通过增大 $k$ 虽可降低虚警, 却会显著削弱对早期或远离测点的损伤的敏感性。为在安全性与定位精度之间取得兼顾, 需引入前述的连续损伤可疑度指标, 在时间维度累积持续异常并滤除短时扰动。
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=0.7\textwidth]{combined_detection_summary.png}
+	\caption{四个测试集的检测结果汇总。每个测试集给出样本超限维度数量分布以及检测/虚警率。基线方法在损伤检测上取得较高命中率, 但定位精度有限, 且健康样本虚警率较高, 暴露了在高维监测场景中基于瞬时二元阈值判定的局限性。}
+	\label{fig:base_result_summary}
+\end{figure}
+
+
+\subsection{基于损伤可疑度的渐进预警与可视化}
+\label{subsec:suspicion_visualization}
+
+为验证所提出损伤可疑度指标的有效性, 我们在四个测试集上进行对比试验。每个测试序列包含 100 个时间步。图~\ref{fig:suspicion_frame} 给出了四类工况下代表性样本的前五帧可疑度分布快照, 其中 252 个测点按索引顺序排布, 以热力图形式显示, 颜色越深表示损伤可疑度越高。
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=\textwidth]{suspicion_frame.jpg}
+	\caption{四类工况代表性样本前五帧损伤可疑度演化。初期帧中受噪声影响, 各场景差异不甚明显; 随时间推移, 损伤区域的可疑度逐渐累积并显著局部化, 健康样本在时间平滑后则保持低水平。(完整动画见: \href{https://github.com/ZhaoSixuan2002/AE-ship-damage-monitoring/raw/main/script/09_render_time_history_output/opacity_animation_combined_2x2.gif}{heatmap\_animation.gif})}
+	\label{fig:suspicion_frame}
+\end{figure}
+
+在损伤发生后的初始阶段, 由于噪声影响, 各场景的可疑度空间模式并不明显可分。例如腐蚀工况在前 1--3 帧仅在少数测点出现略高的可疑度, 难以据此可靠定位; 复合损伤在首帧中右侧损伤区域对应测点几乎仍为浅色; 健康样本甚至可能在前 1--2 帧中出现少量深色点, 若采用瞬时二元判定则会触发虚警。随着时间推进(第 3--5 帧), 滑动窗逐渐覆盖更多受损响应, 损伤区域的可疑度持续累积并在裂纹、腐蚀与复合损伤三类工况下稳定维持在较高水平, 形成清晰的空间模式; 而健康样本的可疑度在时间平滑作用下被不断稀释, 始终保持较低水平。该对比充分体现了由“瞬时告警”向“渐进预警”的范式转换。
+
+为以更加直观、工程友好的方式呈现损伤可疑度, 本文进一步基于 PyVista 构建了三维交互可视化工具链, 将各测点的可疑度映射到船体有限元模型上。图~\ref{fig:3d_crack_visualization} 给出了四类工况在代表性时间步的三维可视化结果, 以及前八帧的早期演化过程。可疑度采用蓝--白--红色标度映射; 工程师可结合结构知识与三维可视化结果, 评估可疑区域的结构重要性, 制定有针对性的检查与维护计划。
+
+\begin{figure*}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{3d_frame.jpg}
+\caption{四类验证场景的三维损伤可疑度可视化。主视图为代表性时间步的稳态可疑度分布, 右侧子图展示前八帧的早期演化。颜色采用蓝--白--红标度映射可疑度。(完整三维动画见: \href{https://github.com/ZhaoSixuan2002/AE-ship-damage-monitoring/raw/main/script/10_render_vtu_animation_output/crack/damage_suspicion_animation.gif}{crack.gif}; \href{https://github.com/ZhaoSixuan2002/AE-ship-damage-monitoring/raw/main/script/10_render_vtu_animation_output/corrosion/damage_suspicion_animation.gif}{corrosion.gif}; \href{https://github.com/ZhaoSixuan2002/AE-ship-damage-monitoring/raw/main/script/10_render_vtu_animation_output/multi/damage_suspicion_animation.gif}{multi.gif}; \href{https://github.com/ZhaoSixuan2002/AE-ship-damage-monitoring/raw/main/script/10_render_vtu_animation_output/health/damage_suspicion_animation.gif}{health.gif})}
+\label{fig:3d_crack_visualization}
+\end{figure*}
+
+
+\section{结论与展望}
+\label{sec:conclusion}
+
+本文针对船体结构健康监测中损伤样本匮乏以及仿真--实船差异突出的双重挑战, 提出了一种仅依赖健康应变响应数据的自编码器损伤识别框架。该方法在 1800 个健康航行样本上训练自编码器, 学习正常响应的低维流形表征, 并利用重构残差刻画损伤扰动, 全程不依赖损伤标签或仿真样本; 在 200 个健康验证样本上统计残差分布, 自动为 252 个测点确定 3 倍标准差阈值, 避免了人工阈值整定。在此基础上, 定义结合逐维阈值与滑动窗平滑(窗长 $w = 10$, 衰减因子 $\alpha = 20$)的连续损伤可疑度指标, 实现了由事后损伤告警向损伤演化渐进预警的转变。
+
+在包含 400 个测试样本的散货船有限元模型算例中, 基线阈值法在裂纹、腐蚀与复合损伤工况下的检测率分别达到 94.0\%、79.0\% 和 85.0\%, 但健康样本虚警率高达 46.9\%, 与理论预测(约 50\%)高度一致, 表明在 252 维监测场景下基于瞬时二元阈值的判定难以避免频繁虚警且定位精度有限。引入连续损伤可疑度指标后, 健康样本的可疑度在时间维度上保持低水平, 而损伤样本在损伤发生后可疑度逐渐升高并稳定在较高水平, 不仅实现了健康与损伤状态的区分, 还能够对损伤演化中间阶段进行连续评估; 时间平滑有效削弱了瞬时噪声与孤立异常点的影响, 为工程人员提供了更稳定、更具解释性的损伤演化跟踪工具。与此同时, 本文构建了覆盖数据获取与处理、模型训练与损伤评估以及三维渲染与交互的自动化流程, 为船体结构健康监测提供了一套完整的技术方案与可视化工具链。
+
+未来工作将围绕以下几个方向展开。首先, 需在真实海洋环境下利用实船监测数据进一步验证所提方法的泛化能力, 为此我们计划开展实船试航数据采集, 并研究适用于实际工况差异的迁移学习策略。其次, 虽然本文聚焦于裂纹与腐蚀两类典型损伤工况, 但在复杂损伤模式(如疲劳与腐蚀耦合、在役结构改造等)下的性能仍需系统评估; 相关的损伤场景库扩展与多尺度建模工作已在进行中。第三, 有必要将所提出的框架与在线监测系统进一步集成, 包括数据采集硬件、通信与数据管理、船上决策支持界面等, 以推动方法在工程现场的实际落地应用。
+
+\section*{数据可获性声明}
+本文所用代码将在论文被接收后公开发布于 GitHub, 并在最终稿中给出访问链接。
+
+\bibliographystyle{elsarticle-harv}
+\bibliography{references}
+
+\end{document}
+
+\endinput
+

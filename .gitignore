@@ -1,49 +1,58 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-*.egg-info/
+# Git 白名单模式配置
+# 默认忽略所有文件，然后只允许指定类型的文件
 
-# FEM files
-*.inp
-*.odb
-*.sim
-*.prt
+# 首先忽略所有文件
+*
 
-# Large output files
-*.npz
-*.pth
-*.vtu
+# 然后允许所有目录（这样才能递归进入子目录）
+!*/
 
-# LaTeX
-*.aux
-*.bbl
-*.blg
-*.fdb_latexmk
-*.fls
-*.log
-*.out
-*.synctex.gz
-*.toc
-*.pdf
+# 允许以下文件类型
 
-# Keep GIF animations
+# 代码文件
+!*.py
+
+# 文本文件
+!*.txt
+!*.md
+
+# LaTeX 相关
+!*.tex
+!*.bib
+
+# PDF 文档
+!*.pdf
+
+# 图片文件
+!*.jpg
+!*.jpeg
+!*.png
 !*.gif
 
-# Directories to ignore
-美工/
-script/01_generate_training_data_output/
-script/02_inp_to_vtu_output/*.vtu
-script/03_preprocess_training_data_output/*.npz
-script/04_train_model_output/*.pth
-script/06_generate_validation_data_output/
-script/07_preprocess_validation_data_output/
-script/FEM_model/
+# 数据文件
+!*.csv
+!*.npz
+!*.npy
 
-# But keep the GIF files in these directories
-!script/09_render_time_history_output/*.gif
-!script/10_render_vtu_animation_output/**/*.gif
+# 配置文件
+!*.json
+
+# 有限元和仿真文件
+!*.cae
+!*.vtu
+!*.inp
+
+# 神经网络模型
+!*.pth
+
+# Git 配置文件本身
+!.gitignore
+!.gitattributes
+
+# 美工文件
+!*.ai
+
+
+# 可选：如果有 README 等重要文件，也可以添加
+!README*
+!LICENSE*

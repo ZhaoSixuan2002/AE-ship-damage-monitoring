@@ -1,0 +1,5 @@
+An autoencoder-based damage identification framework relying only on healthy data is proposed, which avoids errors introduced by simulated damage samples.
+
+A damage suspicion index is defined to enable a paradigm shift from instantaneous binary alarms to continuous gradual warning.
+
+An end-to-end automated pipeline covering data processing, training and evaluation, and 3D visualization is established and validated on a bulk carrier finite element model.
